@@ -3,17 +3,17 @@ importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js'
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js');
 
 // Configuración de Firebase
-// IMPORTANTE: Este archivo debe tener los valores reales de Firebase
+// IMPORTANTE: Este archivo se actualiza automáticamente durante el build con las variables de entorno
 // Los service workers NO pueden usar variables de entorno (import.meta.env)
-// Obtén estos valores de Firebase Console > Configuración del proyecto > Configuración general
-// O usa el mismo firebaseConfig que está en src/app/services/firebase.ts
+// El script scripts/inject-sw-env.js inyecta los valores de VITE_FIREBASE_* durante el build
+// Asegúrate de configurar estas variables en Vercel Dashboard > Settings > Environment Variables
 const firebaseConfig = {
-  apiKey: "AIzaSyBtAL6MeLPfljeXGeOM_wGz3O", // Reemplaza con VITE_FIREBASE_API_KEY de tu .env
-  authDomain: "lendar-app.firebaseapp.com", // Reemplaza con VITE_FIREBASE_AUTH_DOMAIN
-  projectId: "lendar-app", // Reemplaza con VITE_FIREBASE_PROJECT_ID
-  storageBucket: "lendar-app.appspot.com", // Reemplaza con VITE_FIREBASE_STORAGE_BUCKET
-  messagingSenderId: "744581318647", // Reemplaza con VITE_FIREBASE_MESSAGING_SENDER_ID
-  appId: "1:744581318647:web:c96c6b4d5f1d4c707c10f" // Reemplaza con VITE_FIREBASE_APP_ID
+  "apiKey": "",
+  "authDomain": "",
+  "projectId": "lendar-app",
+  "storageBucket": "",
+  "messagingSenderId": "",
+  "appId": ""
 };
 
 // Inicializar Firebase

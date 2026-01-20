@@ -75,10 +75,42 @@ Vercel detectará automáticamente que es un proyecto Vite, pero verifica:
 - Verifica que las variables de Firebase estén correctas
 - Revisa la consola del navegador para errores
 
-### Token FCM no se obtiene
-- Verifica que `VITE_FIREBASE_VAPID_KEY` esté configurada
-- Verifica que el usuario haya permitido notificaciones
-- Revisa los logs del build en Vercel
+### Token FCM no se obtiene (retorna null)
+**Problema común**: El token FCM retorna `null` durante el login en producción.
+
+**Soluciones**:
+1. **Verifica las variables de entorno en Vercel**:
+   - Ve a Vercel Dashboard > Tu proyecto > Settings > Environment Variables
+   - Asegúrate de que TODAS las variables de Firebase estén configuradas:
+     - `VITE_FIREBASE_API_KEY`
+     - `VITE_FIREBASE_AUTH_DOMAIN`
+     - `VITE_FIREBASE_PROJECT_ID`
+     - `VITE_FIREBASE_STORAGE_BUCKET`
+     - `VITE_FIREBASE_MESSAGING_SENDER_ID`
+     - `VITE_FIREBASE_APP_ID`
+     - `VITE_FIREBASE_VAPID_KEY` ⚠️ **CRÍTICO**
+   
+2. **Verifica el Service Worker**:
+   - Abre DevTools > Application > Service Workers
+   - Verifica que `firebase-messaging-sw.js` esté registrado sin errores
+   - Abre el archivo `firebase-messaging-sw.js` en la pestaña Sources
+   - Verifica que el objeto `firebaseConfig` tenga valores reales (no vacíos)
+   - Si los valores están vacíos, el script `inject-sw-env.js` no se ejecutó correctamente
+
+3. **Revisa los logs del build en Vercel**:
+   - Ve a Vercel Dashboard > Tu proyecto > Deployments > [último deploy] > Build Logs
+   - Busca el mensaje: `✅ Service Worker actualizado con variables de entorno`
+   - Si no aparece, verifica que el script se ejecute antes del build
+
+4. **Verifica permisos de notificaciones**:
+   - El navegador debe estar en HTTPS (Vercel lo proporciona automáticamente)
+   - El usuario debe permitir notificaciones cuando se solicite
+   - Verifica en DevTools > Application > Notifications que el permiso esté "granted"
+
+5. **Verifica la consola del navegador**:
+   - Abre DevTools > Console
+   - Busca mensajes de error relacionados con Firebase o Service Worker
+   - Los mensajes deberían indicar qué está fallando específicamente
 
 ### Variables de entorno no funcionan
 - Asegúrate de que todas las variables empiecen con `VITE_`
