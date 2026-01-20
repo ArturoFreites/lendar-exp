@@ -30,41 +30,21 @@ export default defineConfig({
     cssMinify: true,
     rollupOptions: {
       output: {
-        // Code splitting optimizado
+        // Code splitting automático de Vite (más seguro, evita errores de inicialización)
+        // Vite maneja automáticamente el splitting de manera inteligente
+        // Si necesitas control manual, descomenta manualChunks abajo
+        /*
         manualChunks: (id) => {
-          // React y React DOM
-          if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) {
-            return 'react-vendor';
-          }
-          // Firebase
-          if (id.includes('node_modules/firebase')) {
-            return 'firebase-vendor';
-          }
-          // Radix UI (componentes UI)
-          if (id.includes('node_modules/@radix-ui')) {
-            return 'ui-vendor';
-          }
-          // Charts
-          if (id.includes('node_modules/recharts')) {
-            return 'chart-vendor';
-          }
-          // Forms
-          if (id.includes('node_modules/react-hook-form')) {
-            return 'form-vendor';
-          }
-          // Date libraries
-          if (id.includes('node_modules/date-fns')) {
-            return 'date-vendor';
-          }
-          // MUI (si se usa)
-          if (id.includes('node_modules/@mui') || id.includes('node_modules/@emotion')) {
-            return 'mui-vendor';
-          }
-          // Otros node_modules grandes
           if (id.includes('node_modules')) {
+            // Solo separar React (muy grande y estable)
+            if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) {
+              return 'react-vendor';
+            }
+            // Todo lo demás junto (evita problemas de dependencias circulares)
             return 'vendor';
           }
         },
+        */
         // Nombres de archivos con hash para cache busting
         chunkFileNames: 'assets/js/[name]-[hash].js',
         entryFileNames: 'assets/js/[name]-[hash].js',
