@@ -103,13 +103,32 @@ export const getFCMToken = async (): Promise<string | null> => {
     const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
     console.log('✅ Service Worker registrado:', registration.scope);
 
-    // 3. Enviar configuración al Service Worker (para background messages)
+    // 3. Esperar a que el SW esté activo y enviar configuración INMEDIATAMENTE
+    await registration.update(); // Forzar actualización
+    await new Promise(resolve => setTimeout(resolve, 100)); // Pequeña espera
+
+    // Enviar configuración al Service Worker ANTES de inicializar Firebase en el cliente
     if (registration.active) {
       registration.active.postMessage({
         type: 'INIT_FIREBASE',
         data: firebaseConfig
       });
       console.log('✅ Configuración enviada al Service Worker');
+      
+      // Esperar un momento para que el SW procese la configuración
+      await new Promise(resolve => setTimeout(resolve, 200));
+    } else {
+      // Si no está activo, esperar a que esté listo
+      await navigator.serviceWorker.ready;
+      const readyRegistration = await navigator.serviceWorker.getRegistration();
+      if (readyRegistration?.active) {
+        readyRegistration.active.postMessage({
+          type: 'INIT_FIREBASE',
+          data: firebaseConfig
+        });
+        console.log('✅ Configuración enviada al Service Worker (después de ready)');
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
     }
 
     // 4. Inicializar Firebase

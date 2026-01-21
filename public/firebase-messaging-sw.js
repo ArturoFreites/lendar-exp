@@ -23,6 +23,37 @@ function initializeFirebase(config) {
     firebase.initializeApp(config);
     firebaseInitialized = true;
     messaging = firebase.messaging();
+    
+    // Registrar onBackgroundMessage DESPUÉS de inicializar messaging
+    messaging.onBackgroundMessage((payload) => {
+      console.log('[SW] Mensaje recibido en background:', payload);
+      
+      const notificationTitle = payload.notification?.title || payload.data?.title || 'Nueva notificación';
+      const notificationBody = payload.notification?.body || payload.data?.message || '';
+      
+      const notificationOptions = {
+        body: notificationBody,
+        icon: '/icon.png',
+        badge: '/badge.png',
+        tag: payload.data?.notificationId || 'default',
+        data: payload.data || {},
+        requireInteraction: false,
+        silent: false,
+      };
+
+      // Notificar a clientes activos
+      self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+        clientList.forEach((client) => {
+          client.postMessage({
+            type: 'NOTIFICATION_RECEIVED',
+            payload: payload
+          }).catch(() => {});
+        });
+      }).catch(() => {});
+
+      return self.registration.showNotification(notificationTitle, notificationOptions);
+    });
+    
     console.log('[SW] ✅ Firebase inicializado correctamente');
   } catch (error) {
     console.error('[SW] ❌ Error inicializando Firebase:', error);
@@ -39,21 +70,6 @@ self.addEventListener('message', (event) => {
     console.log('[SW] Recibiendo configuración de Firebase...');
     firebaseConfig = data;
     initializeFirebase(data);
-    
-    // Responder confirmación si hay un puerto
-    if (event.ports && event.ports.length > 0) {
-      try {
-        event.ports[0].postMessage({
-          type: 'FIREBASE_INITIALIZED',
-          success: firebaseInitialized
-        });
-        console.log('[SW] ✅ Confirmación enviada al cliente');
-      } catch (error) {
-        console.error('[SW] ❌ Error enviando confirmación:', error);
-      }
-    } else {
-      console.warn('[SW] ⚠️ No hay puerto para responder');
-    }
   }
 
   // Ping para verificar estado
@@ -72,82 +88,40 @@ self.addEventListener('message', (event) => {
   }
 });
 
-// Manejar mensajes en background
-if (messaging) {
-  messaging.onBackgroundMessage((payload) => {
-    console.log('[SW] Mensaje recibido en background:', payload);
-    
-    const notificationTitle = payload.notification?.title || payload.data?.title || 'Nueva notificación';
-    const notificationBody = payload.notification?.body || payload.data?.message || '';
-    
-    const notificationOptions = {
-      body: notificationBody,
+// Manejar eventos push (Firebase los maneja automáticamente, pero mantenemos este como fallback)
+self.addEventListener('push', (event) => {
+  // Firebase Messaging maneja esto automáticamente si está inicializado
+  // Este es solo un fallback
+  if (!firebaseInitialized) {
+    let notificationTitle = 'Nueva notificación';
+    let notificationOptions = {
+      body: 'Has recibido una notificación push',
       icon: '/icon.png',
       badge: '/badge.png',
-      tag: payload.data?.notificationId || 'default',
-      data: payload.data || {},
-      requireInteraction: false,
-      silent: false,
+      tag: 'push-notification',
+      data: {},
     };
 
-    // Notificar a clientes activos
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      clientList.forEach((client) => {
-        client.postMessage({
-          type: 'NOTIFICATION_RECEIVED',
-          payload: payload
-        }).catch(() => {});
-      });
-    }).catch(() => {});
-
-    return self.registration.showNotification(notificationTitle, notificationOptions);
-  });
-}
-
-// Manejar eventos push
-self.addEventListener('push', (event) => {
-  let notificationTitle = 'Nueva notificación';
-  let notificationOptions = {
-    body: 'Has recibido una notificación push',
-    icon: '/icon.png',
-    badge: '/badge.png',
-    tag: 'push-notification',
-    data: {},
-  };
-
-  if (event.data) {
-    try {
-      const data = event.data.json();
-      notificationTitle = data.title || data.notification?.title || notificationTitle;
-      notificationOptions = {
-        body: data.body || data.notification?.body || notificationOptions.body,
-        icon: data.icon || notificationOptions.icon,
-        badge: data.badge || notificationOptions.badge,
-        tag: data.tag || data.data?.notificationId || notificationOptions.tag,
-        data: data.data || data,
-      };
-    } catch (e) {
-      notificationOptions.body = event.data.text() || notificationOptions.body;
+    if (event.data) {
+      try {
+        const data = event.data.json();
+        notificationTitle = data.title || data.notification?.title || notificationTitle;
+        notificationOptions = {
+          body: data.body || data.notification?.body || notificationOptions.body,
+          icon: data.icon || notificationOptions.icon,
+          badge: data.badge || notificationOptions.badge,
+          tag: data.tag || data.data?.notificationId || notificationOptions.tag,
+          data: data.data || data,
+        };
+      } catch (e) {
+        notificationOptions.body = event.data.text() || notificationOptions.body;
+      }
     }
+
+    event.waitUntil(
+      self.registration.showNotification(notificationTitle, notificationOptions)
+    );
   }
-
-  event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      clientList.forEach((client) => {
-        client.postMessage({
-          type: 'NOTIFICATION_RECEIVED',
-          payload: {
-            notification: { title: notificationTitle, body: notificationOptions.body },
-            data: notificationOptions.data
-          }
-        });
-      });
-    })
-  );
-
-  event.waitUntil(
-    self.registration.showNotification(notificationTitle, notificationOptions)
-  );
 });
 
 // Manejar clics en notificaciones
