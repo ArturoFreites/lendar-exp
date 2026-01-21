@@ -1,6 +1,7 @@
 // Importar los scripts de Firebase (versión compat para service workers)
-importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js');
-importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js');
+// Actualizado a versión 11.0.2 para mejor compatibilidad con Firebase 12.x
+importScripts('https://www.gstatic.com/firebasejs/11.0.2/firebase-app-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/11.0.2/firebase-messaging-compat.js');
 
 // Configuración de Firebase
 // IMPORTANTE: Este archivo se actualiza automáticamente durante el build con las variables de entorno
@@ -16,46 +17,92 @@ const firebaseConfig = {
   "appId": ""
 };
 
-// Inicializar Firebase
-firebase.initializeApp(firebaseConfig);
+// Verificar que la configuración no esté vacía
+const configIsValid = firebaseConfig.apiKey && 
+                      firebaseConfig.authDomain && 
+                      firebaseConfig.projectId && 
+                      firebaseConfig.messagingSenderId && 
+                      firebaseConfig.appId;
 
-// Obtener instancia de messaging
-const messaging = firebase.messaging();
+if (!configIsValid) {
+  console.error('[firebase-messaging-sw.js] ❌ Configuración de Firebase vacía o inválida');
+  console.error('[firebase-messaging-sw.js] Verifica que el script inject-sw-env.js se ejecutó correctamente');
+  console.error('[firebase-messaging-sw.js] Config recibida:', firebaseConfig);
+}
+
+// Inicializar Firebase
+let firebaseInitialized = false;
+let messaging = null;
+
+try {
+  if (configIsValid) {
+    firebase.initializeApp(firebaseConfig);
+    firebaseInitialized = true;
+    console.log('[firebase-messaging-sw.js] ✅ Firebase inicializado correctamente');
+    
+    // Obtener instancia de messaging
+    messaging = firebase.messaging();
+    console.log('[firebase-messaging-sw.js] ✅ Firebase Messaging inicializado');
+  } else {
+    console.error('[firebase-messaging-sw.js] ❌ No se puede inicializar Firebase - configuración inválida');
+  }
+} catch (error) {
+  console.error('[firebase-messaging-sw.js] ❌ Error inicializando Firebase:', error);
+  console.error('[firebase-messaging-sw.js] Stack:', error.stack);
+}
 
 // Manejar mensajes en background
-messaging.onBackgroundMessage((payload) => {
-  console.log('[firebase-messaging-sw.js] Mensaje recibido en background:', payload);
-  
-  const notificationTitle = payload.notification?.title || 'Nueva notificación';
-  const notificationOptions = {
-    body: payload.notification?.body || '',
-    icon: '/icon.png', // Asegúrate de tener un icono en public/
-    badge: '/badge.png',
-    tag: payload.data?.notificationId || 'default',
-    data: payload.data || {},
-    requireInteraction: false,
-    silent: false,
-  };
+if (messaging) {
+  messaging.onBackgroundMessage((payload) => {
+    console.log('[firebase-messaging-sw.js] Mensaje recibido en background:', payload);
+    
+    try {
+      const notificationTitle = payload.notification?.title || payload.data?.title || 'Nueva notificación';
+      const notificationBody = payload.notification?.body || payload.data?.message || '';
+      
+      const notificationOptions = {
+        body: notificationBody,
+        icon: '/icon.png', // Asegúrate de tener un icono en public/
+        badge: '/badge.png',
+        tag: payload.data?.notificationId || 'default',
+        data: payload.data || {},
+        requireInteraction: false,
+        silent: false,
+      };
 
-  // Notificar a todos los clientes activos (ventanas abiertas de la app) primero
-  self.clients.matchAll({ 
-    type: 'window', 
-    includeUncontrolled: true 
-  }).then((clientList) => {
-    // Enviar mensaje a todos los clientes activos
-    clientList.forEach((client) => {
-      client.postMessage({
-        type: 'NOTIFICATION_RECEIVED',
-        payload: payload
+      // Notificar a todos los clientes activos (ventanas abiertas de la app) primero
+      self.clients.matchAll({ 
+        type: 'window', 
+        includeUncontrolled: true 
+      }).then((clientList) => {
+        // Enviar mensaje a todos los clientes activos
+        clientList.forEach((client) => {
+          client.postMessage({
+            type: 'NOTIFICATION_RECEIVED',
+            payload: payload
+          }).catch(err => {
+            console.error('[firebase-messaging-sw.js] Error enviando mensaje a cliente:', err);
+          });
+        });
+      }).catch((error) => {
+        console.error('[firebase-messaging-sw.js] Error notificando clientes:', error);
       });
-    });
-  }).catch((error) => {
-    console.error('[firebase-messaging-sw.js] Error notificando clientes:', error);
-  });
 
-  // Mostrar la notificación del sistema
-  return self.registration.showNotification(notificationTitle, notificationOptions);
-});
+      // Mostrar la notificación del sistema
+      return self.registration.showNotification(notificationTitle, notificationOptions);
+    } catch (error) {
+      console.error('[firebase-messaging-sw.js] Error procesando mensaje:', error);
+      // Mostrar notificación genérica en caso de error
+      return self.registration.showNotification('Nueva notificación', {
+        body: 'Has recibido una notificación',
+        icon: '/icon.png',
+        tag: 'error-fallback'
+      });
+    }
+  });
+} else {
+  console.warn('[firebase-messaging-sw.js] ⚠️ Firebase Messaging no está disponible - no se pueden recibir mensajes');
+}
 
 // Manejar eventos push genéricos (desde DevTools o otros servicios)
 self.addEventListener('push', (event) => {
@@ -145,6 +192,28 @@ self.addEventListener('sync', (event) => {
         console.error('[firebase-messaging-sw.js] Error en sync:', error);
       })
     );
+  }
+});
+
+// Escuchar mensajes del cliente para verificación
+self.addEventListener('message', (event) => {
+  console.log('[firebase-messaging-sw.js] Mensaje recibido del cliente:', event.data);
+  
+  if (event.data && event.data.type === 'PING_FIREBASE') {
+    const port = event.ports && event.ports[0];
+    if (port) {
+      port.postMessage({
+        type: 'FIREBASE_READY',
+        initialized: firebaseInitialized,
+        hasMessaging: !!messaging,
+        configValid: configIsValid
+      });
+      console.log('[firebase-messaging-sw.js] ✅ Respondiendo PING_FIREBASE:', {
+        initialized: firebaseInitialized,
+        hasMessaging: !!messaging,
+        configValid: configIsValid
+      });
+    }
   }
 });
 

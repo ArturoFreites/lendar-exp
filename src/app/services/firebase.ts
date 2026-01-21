@@ -59,7 +59,7 @@ export const initializeMessaging = async (): Promise<Messaging | null> => {
   }
 };
 
-// Verificar que el service worker esté listo
+// Verificar que el service worker esté listo Y que Firebase esté inicializado
 const waitForServiceWorker = async (): Promise<boolean> => {
   if (!('serviceWorker' in navigator)) {
     console.warn('⚠️ Service Worker no soportado en este navegador');
@@ -67,15 +67,77 @@ const waitForServiceWorker = async (): Promise<boolean> => {
   }
 
   try {
+    // Esperar a que el service worker esté listo
     const registration = await navigator.serviceWorker.ready;
     console.log('✅ Service Worker listo:', registration.active?.scriptURL);
-    return true;
+    
+    // Verificar que el service worker esté activo
+    if (!registration.active) {
+      console.warn('⚠️ Service Worker registrado pero no activo aún');
+      // Esperar un poco más
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      const reg = await navigator.serviceWorker.ready;
+      if (!reg.active) {
+        console.error('❌ Service Worker no se activó después de esperar');
+        return false;
+      }
+    }
+
+    // Verificar que Firebase esté inicializado en el SW enviando un mensaje
+    return new Promise((resolve) => {
+      const timeout = setTimeout(() => {
+        console.warn('⚠️ Timeout esperando confirmación de Firebase en SW');
+        console.warn('   Esto puede indicar que Firebase no está inicializado en el Service Worker');
+        resolve(false);
+      }, 3000);
+
+      const messageChannel = new MessageChannel();
+      messageChannel.port1.onmessage = (event) => {
+        if (event.data && event.data.type === 'FIREBASE_READY') {
+          clearTimeout(timeout);
+          if (event.data.initialized && event.data.hasMessaging) {
+            console.log('✅ Firebase confirmado en Service Worker');
+            resolve(true);
+          } else {
+            console.error('❌ Firebase no está inicializado correctamente en Service Worker');
+            console.error('   initialized:', event.data.initialized);
+            console.error('   hasMessaging:', event.data.hasMessaging);
+            console.error('   configValid:', event.data.configValid);
+            resolve(false);
+          }
+        } else {
+          clearTimeout(timeout);
+          resolve(false);
+        }
+      };
+
+      messageChannel.port1.onerror = () => {
+        clearTimeout(timeout);
+        console.error('❌ Error en MessageChannel');
+        resolve(false);
+      };
+
+      try {
+        registration.active?.postMessage(
+          { type: 'PING_FIREBASE' },
+          [messageChannel.port2]
+        );
+      } catch (error) {
+        clearTimeout(timeout);
+        console.error('❌ Error enviando mensaje al Service Worker:', error);
+        resolve(false);
+      }
+    });
   } catch (error) {
-    console.warn('⚠️ Service Worker no está listo aún, esperando...');
+    console.warn('⚠️ Service Worker no está listo aún, esperando...', error);
     // Esperar un poco y reintentar
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await new Promise(resolve => setTimeout(resolve, 2000));
     try {
       const registration = await navigator.serviceWorker.ready;
+      if (!registration.active) {
+        console.error('❌ Service Worker no se pudo inicializar');
+        return false;
+      }
       console.log('✅ Service Worker listo después de esperar');
       return true;
     } catch (e) {
@@ -93,7 +155,14 @@ export const getFCMToken = async (): Promise<string | null> => {
       return null;
     }
 
-    // 2. Inicializar Firebase primero
+    // 2. Verificar HTTPS (requerido para push)
+    if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
+      console.error('❌ Push notifications requieren HTTPS (excepto localhost)');
+      console.error('   Protocolo actual:', window.location.protocol);
+      return null;
+    }
+
+    // 3. Inicializar Firebase primero
     console.log('🔧 Inicializando Firebase...');
     const firebaseApp = initializeFirebase();
     if (!firebaseApp) {
@@ -102,15 +171,20 @@ export const getFCMToken = async (): Promise<string | null> => {
     }
     console.log('✅ Firebase inicializado');
 
-    // 3. Verificar que el service worker esté listo
-    console.log('🔧 Verificando Service Worker...');
+    // 4. Verificar que el service worker esté listo Y Firebase inicializado en SW
+    console.log('🔧 Verificando Service Worker y Firebase...');
     const swReady = await waitForServiceWorker();
     if (!swReady) {
-      console.error('❌ Service Worker no está listo. No se puede obtener token FCM.');
+      console.error('❌ Service Worker no está listo o Firebase no está inicializado en SW.');
+      console.error('   Verifica:');
+      console.error('   1. Que el script inject-sw-env.js se ejecutó correctamente');
+      console.error('   2. Que las variables de entorno están configuradas');
+      console.error('   3. Que firebase-messaging-sw.js tiene la configuración correcta');
+      console.error('   4. Revisa la consola del Service Worker en DevTools > Application > Service Workers');
       return null;
     }
 
-    // 4. Inicializar Firebase Messaging
+    // 5. Inicializar Firebase Messaging
     console.log('🔧 Inicializando Firebase Messaging...');
     const messagingInstance = await initializeMessaging();
     if (!messagingInstance) {
@@ -119,16 +193,16 @@ export const getFCMToken = async (): Promise<string | null> => {
     }
     console.log('✅ Firebase Messaging inicializado');
 
-    // 5. Verificar VAPID key
+    // 6. Verificar VAPID key
     const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
     if (!vapidKey || vapidKey.trim() === '') {
-      console.error('❌ VAPID key no configurada en VITE_FIREBASE_VAPID_KEY. Las notificaciones push no funcionarán.');
-      console.error('   Verifica tu archivo .env');
+      console.error('❌ VAPID key no configurada en VITE_FIREBASE_VAPID_KEY.');
+      console.error('   Verifica tu archivo .env o variables de entorno en Vercel');
       return null;
     }
     console.log('✅ VAPID key encontrada:', vapidKey.substring(0, 20) + '...');
 
-    // 6. Solicitar permiso para notificaciones
+    // 7. Solicitar permiso para notificaciones
     console.log('🔔 Solicitando permiso para notificaciones...');
     const permission = await Notification.requestPermission();
     console.log('📋 Permiso de notificaciones:', permission);
@@ -139,21 +213,63 @@ export const getFCMToken = async (): Promise<string | null> => {
       return null;
     }
 
-    // 7. Obtener token FCM
+    // 8. Obtener token FCM con reintentos
     console.log('🔑 Obteniendo token FCM...');
-    const token = await getToken(messagingInstance, { vapidKey });
+    let token: string | null = null;
+    let attempts = 0;
+    const maxAttempts = 3;
     
-    if (token) {
-      console.log('✅ Token FCM obtenido exitosamente');
-      return token;
-    } else {
-      console.warn('⚠️ getToken() retornó null o undefined');
+    while (!token && attempts < maxAttempts) {
+      try {
+        token = await getToken(messagingInstance, { vapidKey });
+        if (token) {
+          console.log('✅ Token FCM obtenido exitosamente');
+          return token;
+        }
+      } catch (error: any) {
+        attempts++;
+        console.warn(`⚠️ Intento ${attempts}/${maxAttempts} falló:`, error.message || error);
+        
+        if (error.code === 'messaging/failed-service-worker-registration') {
+          console.error('   💡 El service worker no está registrado correctamente');
+          // Esperar un poco más y reintentar
+          if (attempts < maxAttempts) {
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            // Forzar actualización del service worker
+            try {
+              const registration = await navigator.serviceWorker.ready;
+              await registration.update();
+              console.log('🔄 Service Worker actualizado, reintentando...');
+            } catch (updateError) {
+              console.error('   Error actualizando service worker:', updateError);
+            }
+          }
+        } else if (error.code === 'messaging/invalid-vapid-key') {
+          console.error('   💡 La VAPID key es inválida');
+          console.error('   💡 Verifica VITE_FIREBASE_VAPID_KEY en tus variables de entorno');
+          return null; // No reintentar si la key es inválida
+        } else if (error.code === 'messaging/registration-token-not-registered') {
+          console.error('   💡 El service worker no está registrado correctamente');
+          if (attempts < maxAttempts) {
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
+        } else if (attempts < maxAttempts) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * attempts));
+        }
+      }
+    }
+    
+    if (!token) {
+      console.warn('⚠️ getToken() retornó null después de', maxAttempts, 'intentos');
       console.warn('   Esto puede deberse a:');
       console.warn('   - Service Worker no configurado correctamente');
       console.warn('   - VAPID key incorrecta');
-      console.warn('   - Problemas con la configuración de Firebase');
-      return null;
+      console.warn('   - Problemas con la configuración de Firebase en el SW');
+      console.warn('   - Firebase no inicializado en el Service Worker');
+      console.warn('   💡 Revisa la consola del Service Worker en DevTools > Application > Service Workers');
     }
+    
+    return token;
   } catch (error) {
     console.error('❌ Error obteniendo token FCM:', error);
     if (error instanceof Error) {
@@ -164,11 +280,15 @@ export const getFCMToken = async (): Promise<string | null> => {
       }
       
       // Errores comunes de Firebase
-      if (error.message.includes('messaging/registration-token-not-registered')) {
+      if (error.message.includes('messaging/registration-token-not-registered') || 
+          (error as any).code === 'messaging/failed-service-worker-registration') {
         console.error('   💡 El service worker no está registrado correctamente');
+        console.error('   💡 Verifica que firebase-messaging-sw.js existe y tiene la configuración correcta');
       }
-      if (error.message.includes('messaging/invalid-vapid-key')) {
+      if (error.message.includes('messaging/invalid-vapid-key') || 
+          (error as any).code === 'messaging/invalid-vapid-key') {
         console.error('   💡 La VAPID key es inválida');
+        console.error('   💡 Verifica VITE_FIREBASE_VAPID_KEY en tus variables de entorno');
       }
     }
     return null;
