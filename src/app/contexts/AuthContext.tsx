@@ -96,40 +96,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [apiUrl]);
 
   const login = async (email: string, password: string, env: Environment) => {
+    console.log('🔐 [LOGIN] Iniciando proceso de login...');
+    console.log('🔐 [LOGIN] Email:', email);
+    console.log('🔐 [LOGIN] Environment:', env);
+    
     try {
       const baseUrl = API_URLS[env];
       const service = createApiService(baseUrl);
       setApiService(service);
       setApiUrl(baseUrl);
+      
+      console.log('🔐 [LOGIN] API Service creado, baseUrl:', baseUrl);
 
       // Intentar obtener token FCM
       let fcmToken: string | null = null;
       try {
-        console.log('🔔 Intentando obtener token FCM...');
-        console.log('   Navegador:', navigator.userAgent);
-        console.log('   Service Worker soportado:', 'serviceWorker' in navigator);
-        console.log('   HTTPS:', window.location.protocol === 'https:' || window.location.hostname === 'localhost');
-        console.log('   URL completa:', window.location.href);
-        console.log('   Llamando a getFCMToken()...');
+        console.log('🔔 [FCM] Intentando obtener token FCM...');
+        console.log('🔔 [FCM] Navegador:', navigator.userAgent);
+        console.log('🔔 [FCM] Service Worker soportado:', 'serviceWorker' in navigator);
+        console.log('🔔 [FCM] HTTPS:', window.location.protocol === 'https:' || window.location.hostname === 'localhost');
+        console.log('🔔 [FCM] URL completa:', window.location.href);
+        console.log('🔔 [FCM] Llamando a getFCMToken()...');
         
         fcmToken = await getFCMToken();
         
-        console.log('📥 getFCMToken() retornó:', fcmToken ? `Token (longitud: ${fcmToken.length})` : 'null');
+        console.log('📥 [FCM] getFCMToken() retornó:', fcmToken ? `Token (longitud: ${fcmToken.length})` : 'null');
         
         if (fcmToken) {
-          console.log('✅ Token FCM obtenido exitosamente');
-          console.log('   Longitud:', fcmToken.length);
-          console.log('   Primeros 50 caracteres:', fcmToken.substring(0, 50) + '...');
+          console.log('✅ [FCM] Token FCM obtenido exitosamente');
+          console.log('✅ [FCM] Longitud:', fcmToken.length);
+          console.log('✅ [FCM] Primeros 50 caracteres:', fcmToken.substring(0, 50) + '...');
         } else {
-          console.warn('⚠️ No se pudo obtener token FCM (retornó null)');
-          console.warn('   Esto puede deberse a:');
-          console.warn('   - VAPID key no configurada');
-          console.warn('   - Permisos de notificaciones denegados');
-          console.warn('   - Service Worker no registrado');
-          console.warn('   - Firebase no inicializado correctamente');
+          console.warn('⚠️ [FCM] No se pudo obtener token FCM (retornó null)');
+          console.warn('⚠️ [FCM] Esto puede deberse a:');
+          console.warn('⚠️ [FCM]   - VAPID key no configurada');
+          console.warn('⚠️ [FCM]   - Permisos de notificaciones denegados');
+          console.warn('⚠️ [FCM]   - Service Worker no registrado');
+          console.warn('⚠️ [FCM]   - Firebase no inicializado correctamente');
         }
       } catch (error) {
-        console.error('❌ Error obteniendo token FCM:', error);
+        console.error('❌ [FCM] Error obteniendo token FCM:', error);
         if (error instanceof Error) {
           console.error('   Tipo:', error.constructor.name);
           console.error('   Mensaje:', error.message);
@@ -140,13 +146,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const platform = getPlatform();
-      console.log('📱 Plataforma detectada:', platform);
-      console.log('📤 Estado del token FCM antes de enviar:');
-      console.log('   - Token existe:', !!fcmToken);
-      console.log('   - Token valor:', fcmToken ? fcmToken.substring(0, 30) + '...' : 'null');
-      console.log('   - Se enviará:', fcmToken ? 'Sí' : 'No');
+      console.log('📱 [LOGIN] Plataforma detectada:', platform);
+      console.log('📤 [LOGIN] Estado del token FCM antes de enviar:');
+      console.log('📤 [LOGIN]   - Token existe:', !!fcmToken);
+      console.log('📤 [LOGIN]   - Token valor:', fcmToken ? fcmToken.substring(0, 30) + '...' : 'null');
+      console.log('📤 [LOGIN]   - Se enviará:', fcmToken ? 'Sí' : 'No');
       
+      console.log('📤 [LOGIN] Llamando a service.login()...');
       const response = await service.login(email, password, fcmToken || undefined, platform);
+      console.log('📥 [LOGIN] service.login() retornó:', response.code);
 
       if (response.code === 200 && response.data) {
         const authData: AuthResponse = response.data;

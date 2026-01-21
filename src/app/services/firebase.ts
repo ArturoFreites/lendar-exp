@@ -148,83 +148,83 @@ const waitForServiceWorker = async (): Promise<boolean> => {
 };
 
 export const getFCMToken = async (): Promise<string | null> => {
-  console.log('🚀 getFCMToken() llamado');
+  console.log('🚀 [FCM] getFCMToken() llamado');
   
   try {
     // 1. Verificar que estamos en un navegador
-    console.log('🔍 Verificando entorno...');
+    console.log('🔍 [FCM] Verificando entorno...');
     if (typeof window === 'undefined') {
-      console.warn('⚠️ No estamos en un navegador (SSR)');
+      console.warn('⚠️ [FCM] No estamos en un navegador (SSR)');
       return null;
     }
-    console.log('✅ Estamos en un navegador');
+    console.log('✅ [FCM] Estamos en un navegador');
 
     // 2. Verificar HTTPS (requerido para push)
-    console.log('🔍 Verificando protocolo...');
-    console.log('   Protocolo:', window.location.protocol);
-    console.log('   Hostname:', window.location.hostname);
+    console.log('🔍 [FCM] Verificando protocolo...');
+    console.log('🔍 [FCM]   Protocolo:', window.location.protocol);
+    console.log('🔍 [FCM]   Hostname:', window.location.hostname);
     if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
-      console.error('❌ Push notifications requieren HTTPS (excepto localhost)');
-      console.error('   Protocolo actual:', window.location.protocol);
+      console.error('❌ [FCM] Push notifications requieren HTTPS (excepto localhost)');
+      console.error('❌ [FCM]   Protocolo actual:', window.location.protocol);
       return null;
     }
-    console.log('✅ Protocolo válido para push');
+    console.log('✅ [FCM] Protocolo válido para push');
 
     // 3. Inicializar Firebase primero
-    console.log('🔧 Inicializando Firebase...');
+    console.log('🔧 [FCM] Inicializando Firebase...');
     const firebaseApp = initializeFirebase();
     if (!firebaseApp) {
-      console.error('❌ Firebase no se pudo inicializar');
+      console.error('❌ [FCM] Firebase no se pudo inicializar');
       return null;
     }
-    console.log('✅ Firebase inicializado');
+    console.log('✅ [FCM] Firebase inicializado');
 
     // 4. Verificar que el service worker esté listo Y Firebase inicializado en SW
-    console.log('🔧 Verificando Service Worker y Firebase...');
+    console.log('🔧 [FCM] Verificando Service Worker y Firebase...');
     const swReady = await waitForServiceWorker();
     if (!swReady) {
-      console.error('❌ Service Worker no está listo o Firebase no está inicializado en SW.');
-      console.error('   Verifica:');
-      console.error('   1. Que el script inject-sw-env.js se ejecutó correctamente');
-      console.error('   2. Que las variables de entorno están configuradas');
-      console.error('   3. Que firebase-messaging-sw.js tiene la configuración correcta');
-      console.error('   4. Revisa la consola del Service Worker en DevTools > Application > Service Workers');
+      console.error('❌ [FCM] Service Worker no está listo o Firebase no está inicializado en SW.');
+      console.error('❌ [FCM]   Verifica:');
+      console.error('❌ [FCM]   1. Que el script inject-sw-env.js se ejecutó correctamente');
+      console.error('❌ [FCM]   2. Que las variables de entorno están configuradas');
+      console.error('❌ [FCM]   3. Que firebase-messaging-sw.js tiene la configuración correcta');
+      console.error('❌ [FCM]   4. Revisa la consola del Service Worker en DevTools > Application > Service Workers');
       return null;
     }
 
     // 5. Inicializar Firebase Messaging
-    console.log('🔧 Inicializando Firebase Messaging...');
+    console.log('🔧 [FCM] Inicializando Firebase Messaging...');
     const messagingInstance = await initializeMessaging();
     if (!messagingInstance) {
-      console.error('❌ Firebase Messaging no se pudo inicializar');
+      console.error('❌ [FCM] Firebase Messaging no se pudo inicializar');
       return null;
     }
-    console.log('✅ Firebase Messaging inicializado');
+    console.log('✅ [FCM] Firebase Messaging inicializado');
 
     // 6. Verificar VAPID key
-    console.log('🔍 Verificando VAPID key...');
+    console.log('🔍 [FCM] Verificando VAPID key...');
     const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
     if (!vapidKey || vapidKey.trim() === '') {
-      console.error('❌ VAPID key no configurada en VITE_FIREBASE_VAPID_KEY.');
-      console.error('   Verifica tu archivo .env o variables de entorno en Vercel');
-      console.error('   import.meta.env.VITE_FIREBASE_VAPID_KEY:', import.meta.env.VITE_FIREBASE_VAPID_KEY);
+      console.error('❌ [FCM] VAPID key no configurada en VITE_FIREBASE_VAPID_KEY.');
+      console.error('❌ [FCM]   Verifica tu archivo .env o variables de entorno en Vercel');
+      console.error('❌ [FCM]   import.meta.env.VITE_FIREBASE_VAPID_KEY:', import.meta.env.VITE_FIREBASE_VAPID_KEY);
       return null;
     }
-    console.log('✅ VAPID key encontrada:', vapidKey.substring(0, 20) + '...');
+    console.log('✅ [FCM] VAPID key encontrada:', vapidKey.substring(0, 20) + '...');
 
     // 7. Solicitar permiso para notificaciones
-    console.log('🔔 Solicitando permiso para notificaciones...');
+    console.log('🔔 [FCM] Solicitando permiso para notificaciones...');
     const permission = await Notification.requestPermission();
-    console.log('📋 Permiso de notificaciones:', permission);
+    console.log('📋 [FCM] Permiso de notificaciones:', permission);
     
     if (permission !== 'granted') {
-      console.warn('⚠️ Permiso de notificaciones denegado. Estado:', permission);
-      console.warn('   El usuario debe permitir notificaciones en la configuración del navegador.');
+      console.warn('⚠️ [FCM] Permiso de notificaciones denegado. Estado:', permission);
+      console.warn('⚠️ [FCM]   El usuario debe permitir notificaciones en la configuración del navegador.');
       return null;
     }
 
     // 8. Obtener token FCM con reintentos
-    console.log('🔑 Obteniendo token FCM...');
+    console.log('🔑 [FCM] Obteniendo token FCM...');
     let token: string | null = null;
     let attempts = 0;
     const maxAttempts = 3;
