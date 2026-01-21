@@ -148,19 +148,27 @@ const waitForServiceWorker = async (): Promise<boolean> => {
 };
 
 export const getFCMToken = async (): Promise<string | null> => {
+  console.log('🚀 getFCMToken() llamado');
+  
   try {
     // 1. Verificar que estamos en un navegador
+    console.log('🔍 Verificando entorno...');
     if (typeof window === 'undefined') {
       console.warn('⚠️ No estamos en un navegador (SSR)');
       return null;
     }
+    console.log('✅ Estamos en un navegador');
 
     // 2. Verificar HTTPS (requerido para push)
+    console.log('🔍 Verificando protocolo...');
+    console.log('   Protocolo:', window.location.protocol);
+    console.log('   Hostname:', window.location.hostname);
     if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
       console.error('❌ Push notifications requieren HTTPS (excepto localhost)');
       console.error('   Protocolo actual:', window.location.protocol);
       return null;
     }
+    console.log('✅ Protocolo válido para push');
 
     // 3. Inicializar Firebase primero
     console.log('🔧 Inicializando Firebase...');
@@ -194,10 +202,12 @@ export const getFCMToken = async (): Promise<string | null> => {
     console.log('✅ Firebase Messaging inicializado');
 
     // 6. Verificar VAPID key
+    console.log('🔍 Verificando VAPID key...');
     const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
     if (!vapidKey || vapidKey.trim() === '') {
       console.error('❌ VAPID key no configurada en VITE_FIREBASE_VAPID_KEY.');
       console.error('   Verifica tu archivo .env o variables de entorno en Vercel');
+      console.error('   import.meta.env.VITE_FIREBASE_VAPID_KEY:', import.meta.env.VITE_FIREBASE_VAPID_KEY);
       return null;
     }
     console.log('✅ VAPID key encontrada:', vapidKey.substring(0, 20) + '...');

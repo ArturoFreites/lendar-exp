@@ -18,11 +18,11 @@ const firebaseConfig = {
 };
 
 // Verificar que la configuración no esté vacía
-const configIsValid = firebaseConfig.apiKey && 
+const configIsValid = !!(firebaseConfig.apiKey && 
                       firebaseConfig.authDomain && 
                       firebaseConfig.projectId && 
                       firebaseConfig.messagingSenderId && 
-                      firebaseConfig.appId;
+                      firebaseConfig.appId);
 
 if (!configIsValid) {
   console.error('[firebase-messaging-sw.js] ❌ Configuración de Firebase vacía o inválida');

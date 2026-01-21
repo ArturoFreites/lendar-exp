@@ -109,8 +109,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log('   Navegador:', navigator.userAgent);
         console.log('   Service Worker soportado:', 'serviceWorker' in navigator);
         console.log('   HTTPS:', window.location.protocol === 'https:' || window.location.hostname === 'localhost');
+        console.log('   URL completa:', window.location.href);
+        console.log('   Llamando a getFCMToken()...');
         
         fcmToken = await getFCMToken();
+        
+        console.log('📥 getFCMToken() retornó:', fcmToken ? `Token (longitud: ${fcmToken.length})` : 'null');
+        
         if (fcmToken) {
           console.log('✅ Token FCM obtenido exitosamente');
           console.log('   Longitud:', fcmToken.length);
