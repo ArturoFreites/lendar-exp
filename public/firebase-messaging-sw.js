@@ -9,12 +9,12 @@ importScripts('https://www.gstatic.com/firebasejs/11.0.2/firebase-messaging-comp
 // El script scripts/inject-sw-env.js inyecta los valores de VITE_FIREBASE_* durante el build
 // Asegúrate de configurar estas variables en Vercel Dashboard > Settings > Environment Variables
 const firebaseConfig = {
-  "apiKey": "",
-  "authDomain": "",
+  "apiKey": "AIzaSyBtAL6MeLPfljeXGeOM_wGz3O-s96nGddE",
+  "authDomain": "lendar-app.firebaseapp.com",
   "projectId": "lendar-app",
-  "storageBucket": "",
-  "messagingSenderId": "",
-  "appId": ""
+  "storageBucket": "lendar-app.appspot.com",
+  "messagingSenderId": "744581318647",
+  "appId": "1:744581318647:web:c96c6b4d5f1d4c707c10f"
 };
 
 // Verificar que la configuración no esté vacía

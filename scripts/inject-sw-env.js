@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
@@ -8,19 +8,56 @@ const __dirname = dirname(__filename);
 const rootDir = resolve(__dirname, '..');
 
 const swPath = resolve(rootDir, 'public/firebase-messaging-sw.js');
+const envPath = resolve(rootDir, '.env');
+
+// Función para cargar variables de entorno desde .env
+function loadEnvFile() {
+  if (!existsSync(envPath)) {
+    console.warn('⚠️  Archivo .env no encontrado');
+    console.warn('   Crea un archivo .env basado en env.example');
+    return {};
+  }
+
+  try {
+    const envContent = readFileSync(envPath, 'utf-8');
+    const envVars = {};
+    
+    envContent.split('\n').forEach(line => {
+      line = line.trim();
+      // Ignorar comentarios y líneas vacías
+      if (line && !line.startsWith('#')) {
+        const match = line.match(/^([^=]+)=(.*)$/);
+        if (match) {
+          const key = match[1].trim();
+          const value = match[2].trim().replace(/^["']|["']$/g, ''); // Remover comillas
+          envVars[key] = value;
+        }
+      }
+    });
+    
+    return envVars;
+  } catch (error) {
+    console.error('❌ Error leyendo archivo .env:', error.message);
+    return {};
+  }
+}
 
 try {
   let swContent = readFileSync(swPath, 'utf-8');
 
-  // Obtener variables de entorno (Vite las expone en process.env)
-  // En Vercel, estas variables deben estar configuradas en el dashboard
+  // Cargar variables de entorno desde .env (para desarrollo)
+  const envVars = loadEnvFile();
+  
+  // Obtener variables de entorno (prioridad: process.env > .env file)
+  // En Vercel, process.env tiene las variables configuradas en el dashboard
+  // En desarrollo, se cargan desde .env
   const firebaseConfig = {
-    apiKey: process.env.VITE_FIREBASE_API_KEY || '',
-    authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN || '',
-    projectId: process.env.VITE_FIREBASE_PROJECT_ID || 'lendar-app',
-    storageBucket: process.env.VITE_FIREBASE_STORAGE_BUCKET || '',
-    messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
-    appId: process.env.VITE_FIREBASE_APP_ID || '',
+    apiKey: process.env.VITE_FIREBASE_API_KEY || envVars.VITE_FIREBASE_API_KEY || '',
+    authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN || envVars.VITE_FIREBASE_AUTH_DOMAIN || '',
+    projectId: process.env.VITE_FIREBASE_PROJECT_ID || envVars.VITE_FIREBASE_PROJECT_ID || 'lendar-app',
+    storageBucket: process.env.VITE_FIREBASE_STORAGE_BUCKET || envVars.VITE_FIREBASE_STORAGE_BUCKET || '',
+    messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID || envVars.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
+    appId: process.env.VITE_FIREBASE_APP_ID || envVars.VITE_FIREBASE_APP_ID || '',
   };
 
   console.log('🔧 Variables de entorno detectadas:');
