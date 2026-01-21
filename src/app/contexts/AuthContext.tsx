@@ -183,11 +183,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.error('❌ [FCM] Error crítico: No se pudo obtener token FCM');
         console.error('❌ [FCM] El login no puede continuar sin el token FCM');
         
-        const errorMessage = error instanceof Error 
-          ? error.message 
-          : 'No se pudo obtener el token FCM. Verifica que las notificaciones estén habilitadas.';
+        let errorMessage: string;
+        let userFriendlyMessage: string;
         
-        toast.error('Error: ' + errorMessage);
+        if (error instanceof Error) {
+          errorMessage = error.message;
+          
+          // Crear mensaje amigable para el usuario basado en el tipo de error
+          if (errorMessage.includes('permisos') || errorMessage.includes('permission') || errorMessage.includes('bloqueados')) {
+            userFriendlyMessage = 'Necesitas habilitar las notificaciones para continuar.\n\n' +
+              'Por favor:\n' +
+              '1. Haz clic en el ícono de candado 🔒 en la barra de direcciones\n' +
+              '2. Busca "Notificaciones" y cámbialo a "Permitir"\n' +
+              '3. Recarga la página e intenta nuevamente';
+          } else if (errorMessage.includes('HTTPS') || errorMessage.includes('protocolo')) {
+            userFriendlyMessage = 'Las notificaciones requieren una conexión segura (HTTPS).\n\n' +
+              'Por favor, accede a la aplicación usando HTTPS.';
+          } else if (errorMessage.includes('VAPID') || errorMessage.includes('key')) {
+            userFriendlyMessage = 'Error de configuración del servidor.\n\n' +
+              'Por favor, contacta al administrador del sistema.';
+          } else if (errorMessage.includes('Service Worker') || errorMessage.includes('SW')) {
+            userFriendlyMessage = 'Error al inicializar las notificaciones.\n\n' +
+              'Por favor:\n' +
+              '1. Recarga la página completamente (Ctrl+Shift+R o Cmd+Shift+R)\n' +
+              '2. Si el problema persiste, contacta al soporte técnico';
+          } else {
+            userFriendlyMessage = 'No se pudo obtener el token de notificaciones.\n\n' +
+              'Por favor, verifica que las notificaciones estén habilitadas en tu navegador e intenta nuevamente.';
+          }
+        } else {
+          errorMessage = 'No se pudo obtener el token FCM. Verifica que las notificaciones estén habilitadas.';
+          userFriendlyMessage = errorMessage;
+        }
+        
+        console.error('❌ [FCM] Mensaje de error completo:', errorMessage);
+        toast.error(userFriendlyMessage, {
+          duration: 10000, // Mostrar por 10 segundos
+        });
+        
         throw new Error(errorMessage);
       }
 
