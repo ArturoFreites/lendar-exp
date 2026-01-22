@@ -337,26 +337,27 @@ class ApiService {
     };
   }
 
-  async login(email: string, password: string, fcmToken?: string, platform?: string): Promise<QrResponse<AuthResponse>> {
+  async login(email: string, password: string): Promise<QrResponse<AuthResponse>> {
     const body: AuthRequest = {
       email,
       password,
-      ...(fcmToken && { fcmToken }),
-      ...(platform && { platform }),
     };
 
     console.log('📤 Request de login:', {
       email,
       hasPassword: !!password,
-      hasFcmToken: !!fcmToken,
-      fcmToken: fcmToken ? fcmToken.substring(0, 30) + '...' : 'null',
-      platform,
     });
-    console.log('📦 Body completo:', JSON.stringify(body, null, 2));
 
     return this.request<AuthResponse>('/backoffice/api/auth/login', {
       method: 'POST',
       body: JSON.stringify(body),
+    });
+  }
+
+  async logout(): Promise<QrResponse<null>> {
+    return this.request<null>('/backoffice/api/auth/logout', {
+      method: 'POST',
+      body: JSON.stringify({}),
     });
   }
 
@@ -484,7 +485,7 @@ class ApiService {
     });
   }
 
-  async registerFcmToken(request: UserFcmTokenRequest): Promise<QrResponse<null>> {
+  async registerFcmToken(request: { fcmToken: string }): Promise<QrResponse<null>> {
     return this.request<null>('/backoffice/api/user/fcm-token', {
       method: 'POST',
       body: JSON.stringify(request),

@@ -59,133 +59,69 @@ export const initializeMessaging = async (): Promise<Messaging | null> => {
   }
 };
 
-// Obtener token FCM - Patrón básico simplificado
+// Obtener token FCM - Patrón simplificado (similar al blog)
 export const getFCMToken = async (): Promise<string | null> => {
   try {
     // Verificar requisitos básicos
-    if (typeof window === 'undefined') {
-      throw new Error('No se puede obtener el token FCM fuera de un navegador');
-    }
-
-    if (!('serviceWorker' in navigator)) {
-      throw new Error('Service Workers no están soportados en este navegador');
-    }
-
-    // Verificar HTTPS (excepto localhost)
-    const isLocalhost = window.location.hostname === 'localhost' || 
-                        window.location.hostname === '127.0.0.1' ||
-                        window.location.hostname.startsWith('192.168.');
-    
-    if (window.location.protocol !== 'https:' && !isLocalhost) {
-      throw new Error('Las notificaciones push requieren HTTPS en producción');
+    if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
+      throw new Error('Service Workers no están soportados');
     }
 
     // Verificar VAPID key
-    const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
-    if (!vapidKey || vapidKey.trim() === '') {
-      throw new Error('VAPID key no configurada (VITE_FIREBASE_VAPID_KEY). Verifica tu archivo .env o variables de entorno.');
+    const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY?.trim();
+    if (!vapidKey) {
+      throw new Error('VAPID key no configurada (VITE_FIREBASE_VAPID_KEY)');
     }
 
-    const trimmedKey = vapidKey.trim();
-    if (trimmedKey.length < 80) {
-      throw new Error(`VAPID key parece inválida (muy corta: ${trimmedKey.length} caracteres). Debe tener al menos 80 caracteres.`);
-    }
-
-    console.log('🔑 VAPID key detectada:', trimmedKey.substring(0, 20) + '... (longitud: ' + trimmedKey.length + ')');
-
-    // 1. Solicitar permisos primero
+    // 1. Solicitar permisos
     const permission = await Notification.requestPermission();
     if (permission !== 'granted') {
-      throw new Error('Permisos de notificaciones no concedidos. Habilítalos en la configuración del navegador.');
+      throw new Error('Permisos de notificaciones no concedidos');
     }
 
-    // 2. Registrar Service Worker explícitamente
+    // 2. Registrar Service Worker y enviar configuración
     const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
-    console.log('✅ Service Worker registrado:', registration.scope);
-
-    // 3. Esperar a que el SW esté activo y enviar configuración INMEDIATAMENTE
-    await registration.update(); // Forzar actualización
-    await new Promise(resolve => setTimeout(resolve, 100)); // Pequeña espera
-
-    // Enviar configuración al Service Worker ANTES de inicializar Firebase en el cliente
+    
+    // Enviar configuración al SW
     if (registration.active) {
       registration.active.postMessage({
         type: 'INIT_FIREBASE',
         data: firebaseConfig
       });
-      console.log('✅ Configuración enviada al Service Worker');
-      
-      // Esperar un momento para que el SW procese la configuración
       await new Promise(resolve => setTimeout(resolve, 200));
-    } else {
-      // Si no está activo, esperar a que esté listo
-      await navigator.serviceWorker.ready;
-      const readyRegistration = await navigator.serviceWorker.getRegistration();
-      if (readyRegistration?.active) {
-        readyRegistration.active.postMessage({
-          type: 'INIT_FIREBASE',
-          data: firebaseConfig
-        });
-        console.log('✅ Configuración enviada al Service Worker (después de ready)');
-        await new Promise(resolve => setTimeout(resolve, 200));
-      }
     }
 
-    // 4. Inicializar Firebase
+    // 3. Inicializar Firebase y Messaging
     const firebaseApp = initializeFirebase();
     if (!firebaseApp) {
       throw new Error('Firebase no se pudo inicializar');
     }
 
-    // 5. Inicializar Messaging
     const messagingInstance = getMessaging(firebaseApp);
-    if (!messagingInstance) {
-      throw new Error('Firebase Messaging no se pudo inicializar');
+
+    // 4. Obtener token (patrón del blog)
+    const token = await getToken(messagingInstance, {
+      vapidKey: vapidKey,
+      serviceWorkerRegistration: registration
+    });
+
+    if (token) {
+      console.log('✅ Token FCM obtenido:', token.substring(0, 30) + '...');
+      return token;
     }
 
-    // 6. Obtener token pasando el serviceWorkerRegistration
-    try {
-      const token = await getToken(messagingInstance, {
-        vapidKey: trimmedKey,
-        serviceWorkerRegistration: registration
-      });
-      
-      if (token) {
-        console.log('✅ Token FCM obtenido exitosamente:', token.substring(0, 30) + '...');
-        return token;
-      }
-
-      throw new Error('No se pudo obtener el token FCM (retornó null)');
-    } catch (tokenError: any) {
-      // Mejorar mensajes de error específicos
-      const errorMessage = tokenError?.message || '';
-      const errorCode = tokenError?.code || '';
-      
-      if (errorMessage.includes('applicationServerKey') || 
-          errorMessage.includes('not valid') ||
-          errorCode === 'messaging/invalid-vapid-key') {
-        throw new Error(
-          'VAPID key inválida. ' +
-          'Verifica que VITE_FIREBASE_VAPID_KEY esté configurada correctamente en tu archivo .env. ' +
-          'La key debe obtenerse de Firebase Console > Cloud Messaging > Web Push certificates.'
-        );
-      }
-      
-      if (errorMessage.includes('push service error') || 
-          errorMessage.includes('Registration failed')) {
-        throw new Error(
-          'Error del servicio push de Firebase. ' +
-          'Verifica en Google Cloud Console que la "Firebase Cloud Messaging API" esté habilitada. ' +
-          'Ve a: https://console.cloud.google.com/apis/library/fcm.googleapis.com ' +
-          'y haz clic en "ENABLE". ' +
-          'Luego espera 2-3 minutos y vuelve a intentar.'
-        );
-      }
-      
-      throw tokenError;
-    }
-  } catch (error) {
+    throw new Error('No se pudo obtener el token FCM');
+  } catch (error: any) {
     console.error('❌ Error obteniendo token FCM:', error);
+    
+    // Mensajes de error mejorados
+    if (error?.message?.includes('push service error') || 
+        error?.message?.includes('Registration failed')) {
+      throw new Error(
+        'Error del servicio push. Verifica que la "Firebase Cloud Messaging API" esté habilitada en Google Cloud Console.'
+      );
+    }
+    
     throw error;
   }
 };

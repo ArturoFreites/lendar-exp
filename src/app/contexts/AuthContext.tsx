@@ -19,7 +19,7 @@ interface AuthContextType {
   environment: Environment;
   apiUrl: string;
   login: (email: string, password: string, env: Environment) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   isAuthenticated: boolean;
   apiService: ReturnType<typeof createApiService> | null;
 }
@@ -105,7 +105,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const getFCMTokenWithTimeout = async (
     timeoutMs: number = 15000,
     required: boolean = true
-  ): Promise<string> => {
+  ): Promise<string | null> => {
     console.log('🔔 [FCM] Iniciando obtención de token FCM (OBLIGATORIO)...');
     console.log('🔔 [FCM] Timeout:', timeoutMs, 'ms');
     
@@ -133,7 +133,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (required) {
           throw error;
         }
-        return null as any; // Nunca debería llegar aquí si required=true
+        return null;
       }
     } catch (error) {
       console.error('❌ [FCM] Error obteniendo token FCM:', error);
@@ -170,83 +170,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       console.log('🔐 [LOGIN] API Service creado, baseUrl:', baseUrl);
 
-      // 2. OBTENER TOKEN FCM (OBLIGATORIO) - El login no puede continuar sin él
-      console.log('🔔 [FCM] Obteniendo token FCM (OBLIGATORIO antes de login)...');
-      let fcmToken: string;
-      
-      try {
-        // Timeout de 15 segundos, requerido (lanza error si no se obtiene)
-        fcmToken = await getFCMTokenWithTimeout(15000, true);
-        console.log('✅ [FCM] Token FCM obtenido exitosamente');
-        console.log('✅ [FCM] Token listo para enviar en el login');
-      } catch (error) {
-        console.error('❌ [FCM] Error crítico: No se pudo obtener token FCM');
-        console.error('❌ [FCM] El login no puede continuar sin el token FCM');
-        
-        let errorMessage: string;
-        let userFriendlyMessage: string;
-        
-        if (error instanceof Error) {
-          errorMessage = error.message;
-          
-          // Crear mensaje amigable para el usuario basado en el tipo de error
-          if (errorMessage.includes('permisos') || errorMessage.includes('permission') || errorMessage.includes('bloqueados')) {
-            userFriendlyMessage = 'Necesitas habilitar las notificaciones para continuar.\n\n' +
-              'Por favor:\n' +
-              '1. Haz clic en el ícono de candado 🔒 en la barra de direcciones\n' +
-              '2. Busca "Notificaciones" y cámbialo a "Permitir"\n' +
-              '3. Recarga la página e intenta nuevamente';
-          } else if (errorMessage.includes('HTTPS') || errorMessage.includes('protocolo')) {
-            userFriendlyMessage = 'Las notificaciones requieren una conexión segura (HTTPS).\n\n' +
-              'Por favor, accede a la aplicación usando HTTPS.';
-          } else if (errorMessage.includes('VAPID') || errorMessage.includes('key')) {
-            userFriendlyMessage = 'Error de configuración del servidor.\n\n' +
-              'Por favor, contacta al administrador del sistema.';
-          } else if (errorMessage.includes('Service Worker') || errorMessage.includes('SW')) {
-            userFriendlyMessage = 'Error al inicializar las notificaciones.\n\n' +
-              'Por favor:\n' +
-              '1. Recarga la página completamente (Ctrl+Shift+R o Cmd+Shift+R)\n' +
-              '2. Si el problema persiste, contacta al soporte técnico';
-          } else {
-            userFriendlyMessage = 'No se pudo obtener el token de notificaciones.\n\n' +
-              'Por favor, verifica que las notificaciones estén habilitadas en tu navegador e intenta nuevamente.';
-          }
-        } else {
-          errorMessage = 'No se pudo obtener el token FCM. Verifica que las notificaciones estén habilitadas.';
-          userFriendlyMessage = errorMessage;
-        }
-        
-        console.error('❌ [FCM] Mensaje de error completo:', errorMessage);
-        toast.error(userFriendlyMessage, {
-          duration: 10000, // Mostrar por 10 segundos
-        });
-        
-        throw new Error(errorMessage);
-      }
-
-      // 3. Detectar plataforma
-      const platform = getPlatform();
-      console.log('📱 [LOGIN] Plataforma detectada:', platform);
-
-      // 4. Preparar request de login (con token FCM obligatorio)
-      console.log('📤 [LOGIN] Preparando request de login...');
-      console.log('📤 [LOGIN]   - Email:', email);
-      console.log('📤 [LOGIN]   - Platform:', platform);
-      console.log('📤 [LOGIN]   - FCM Token:', `${fcmToken.substring(0, 30)}... (${fcmToken.length} chars)`);
-      console.log('📤 [LOGIN]   - Token FCM presente: ✅');
-      
-      // 5. Realizar login (con token FCM)
-      console.log('📤 [LOGIN] Enviando request de login con token FCM...');
-      const response = await service.login(email, password, fcmToken, platform);
+      // 2. Realizar login SIN FCM (no bloqueante)
+      console.log('📤 [LOGIN] Enviando request de login...');
+      const response = await service.login(email, password);
       console.log('📥 [LOGIN] Respuesta recibida, código:', response.code);
 
-      // 6. Procesar respuesta
+      // 3. Procesar respuesta
       if (response.code === 200 && response.data) {
         const authData: AuthResponse = response.data;
         console.log('✅ [LOGIN] Login exitoso');
         console.log('✅ [LOGIN] Usuario:', authData.email);
         console.log('✅ [LOGIN] ID:', authData.id);
-        console.log('✅ [LOGIN] Token FCM registrado en el backend');
         
         setUser({
           id: authData.id,
@@ -259,6 +193,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setEnvironment(env);
         
         toast.success('¡Bienvenido al sistema!');
+
+        // 4. Registrar FCM en background (no bloqueante)
+        registerFcmTokenInBackground(service);
       } else {
         console.error('❌ [LOGIN] Error en respuesta:', response.message);
         throw new Error(response.message || 'Error al iniciar sesión');
@@ -266,31 +203,69 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('❌ [LOGIN] Error en proceso de login:', error);
       const errorMessage = error instanceof Error ? error.message : 'Error al iniciar sesión';
-      
-      // Si el error es por FCM, mostrar mensaje más específico
-      if (errorMessage.includes('FCM') || errorMessage.includes('token')) {
-        toast.error('Error: No se pudo obtener el token de notificaciones. ' + 
-                   'Por favor, habilita las notificaciones en tu navegador e intenta nuevamente.');
-      } else {
-        toast.error(errorMessage);
-      }
-      
+      toast.error(errorMessage);
       throw error;
     }
   };
 
-  const logout = () => {
-    setUser(null);
-    setEnvironment('development');
-    setApiUrl(API_URLS.development);
-    setApiService(null);
-    // Limpiar localStorage
-    localStorage.removeItem(STORAGE_KEYS.USER);
-    localStorage.removeItem(STORAGE_KEYS.ENVIRONMENT);
-    localStorage.removeItem(STORAGE_KEYS.API_URL);
-    // Limpiar cookies si es necesario
-    document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-    document.cookie = 'refresh_token=; path=/backoffice/api/auth; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+  /**
+   * Registra el token FCM en background después del login (no bloqueante)
+   */
+  const registerFcmTokenInBackground = async (service: ReturnType<typeof createApiService>) => {
+    console.log('🔔 [FCM] Iniciando registro de token FCM en background...');
+    
+    // Ejecutar en background sin bloquear
+    (async () => {
+      try {
+        // Intentar obtener token FCM con timeout más corto y no requerido
+        const fcmToken = await getFCMTokenWithTimeout(10000, false).catch(() => null);
+        
+        if (!fcmToken) {
+          console.warn('⚠️ [FCM] No se pudo obtener token FCM, se registrará más tarde');
+          return;
+        }
+
+        console.log('✅ [FCM] Token FCM obtenido, registrando en backend...');
+        
+        // Registrar token FCM en el backend
+        await service.registerFcmToken({ fcmToken });
+        console.log('✅ [FCM] Token FCM registrado exitosamente en el backend');
+      } catch (error) {
+        // No mostrar error al usuario, solo log
+        console.error('❌ [FCM] Error registrando token FCM (no crítico):', error);
+      }
+    })();
+  };
+
+  const logout = async () => {
+    try {
+      // Llamar al endpoint de logout del backend si hay servicio configurado
+      if (apiService) {
+        console.log('🔐 [LOGOUT] Cerrando sesión en el backend...');
+        try {
+          await apiService.logout();
+          console.log('✅ [LOGOUT] Sesión cerrada en el backend');
+        } catch (error) {
+          console.error('⚠️ [LOGOUT] Error al cerrar sesión en el backend (continuando con limpieza local):', error);
+        }
+      }
+    } catch (error) {
+      console.error('⚠️ [LOGOUT] Error en proceso de logout:', error);
+    } finally {
+      // Limpiar estado local siempre, incluso si falla el logout en el backend
+      setUser(null);
+      setEnvironment('development');
+      setApiUrl(API_URLS.development);
+      setApiService(null);
+      // Limpiar localStorage
+      localStorage.removeItem(STORAGE_KEYS.USER);
+      localStorage.removeItem(STORAGE_KEYS.ENVIRONMENT);
+      localStorage.removeItem(STORAGE_KEYS.API_URL);
+      // Limpiar cookies
+      document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+      document.cookie = 'refresh_token=; path=/backoffice/api/auth; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+      console.log('✅ [LOGOUT] Estado local limpiado');
+    }
   };
 
   return (
