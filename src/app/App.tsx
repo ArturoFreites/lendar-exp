@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
+import { ErrorProvider } from './contexts/ErrorContext';
 import { Login } from './components/Login';
 import { Layout } from './components/Layout';
 import { Dashboard } from './components/modules/Dashboard';
@@ -73,11 +74,13 @@ function AppContent() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <NotificationProvider>
-        <AppContent />
-        <Toaster />
-      </NotificationProvider>
-    </AuthProvider>
+    <ErrorProvider>
+      <AuthProvider>
+        <NotificationProvider>
+          <AppContent />
+          <Toaster />
+        </NotificationProvider>
+      </AuthProvider>
+    </ErrorProvider>
   );
 }

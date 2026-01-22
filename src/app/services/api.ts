@@ -1,3 +1,5 @@
+import { triggerGlobalError } from '../utils/globalErrorHandler';
+
 interface QrResponse<T> {
   data: T | null;
   code: number;
@@ -282,24 +284,78 @@ class ApiService {
   ): Promise<QrResponse<T>> {
     const url = `${this.baseUrl}${endpoint}`;
     
+    // Log para FCM
+    const isFcmRequest = endpoint.includes('/fcm-token');
+    if (isFcmRequest) {
+      console.log('🌐 [REQUEST] Iniciando petición FCM:', {
+        url,
+        method: options.method || 'GET',
+        hasBody: !!options.body,
+        bodyPreview: options.body ? (typeof options.body === 'string' ? options.body.substring(0, 100) + '...' : 'Object') : undefined
+      });
+    }
+    
     const defaultHeaders: HeadersInit = {
       'Content-Type': 'application/json',
     };
 
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        ...defaultHeaders,
-        ...options.headers,
-      },
-      credentials: 'include', // Importante para cookies
-    });
+    let response: Response;
+    try {
+      const fetchOptions: RequestInit = {
+        ...options,
+        headers: {
+          ...defaultHeaders,
+          ...options.headers,
+        },
+        credentials: 'include', // Importante para cookies
+      };
+      
+      if (isFcmRequest) {
+        console.log('🌐 [REQUEST] Opciones de fetch:', {
+          method: fetchOptions.method,
+          headers: fetchOptions.headers,
+          hasBody: !!fetchOptions.body,
+          credentials: fetchOptions.credentials
+        });
+      }
+      
+      response = await fetch(url, fetchOptions);
+      
+      if (isFcmRequest) {
+        console.log('🌐 [REQUEST] Respuesta recibida:', {
+          status: response.status,
+          statusText: response.statusText,
+          ok: response.ok,
+          headers: Object.fromEntries(response.headers.entries())
+        });
+      }
+    } catch (networkError) {
+      // Error de red (sin conexión, timeout, etc.)
+      const errorMessage = networkError instanceof Error 
+        ? networkError.message 
+        : 'Error de conexión. Verifica tu conexión a internet.';
+      const error = {
+        message: errorMessage,
+        code: 0,
+        isNetworkError: true,
+      };
+      
+      // Disparar error global
+      triggerGlobalError({
+        title: 'Error de conexión',
+        message: errorMessage,
+        code: 0,
+      });
+      
+      throw error;
+    }
 
     // Si recibimos un 403 y no es el endpoint de refresh ni login, intentar refrescar el token
     if (response.status === 403 && retryOn403 && !endpoint.includes('/auth/refresh') && !endpoint.includes('/auth/login')) {
       // Guardar el error original antes de intentar refresh
       const errorDataPromise = response.json().catch(() => ({
         message: `Error ${response.status}: ${response.statusText}`,
+        code: response.status,
       }));
       
       const refreshSuccess = await this.refreshToken();
@@ -310,15 +366,49 @@ class ApiService {
       } else {
         // Si el refresh falla, lanzar el error original
         const errorData = await errorDataPromise;
-        throw new Error(errorData.message || `Error ${response.status}: Token expirado. Por favor, inicia sesión nuevamente.`);
+        const error = {
+          message: errorData.message || `Error ${response.status}: Token expirado. Por favor, inicia sesión nuevamente.`,
+          code: response.status,
+          errors: errorData.errors,
+        };
+        
+        // Disparar error global
+        triggerGlobalError({
+          title: 'Error de autenticación',
+          message: error.message,
+          code: error.code,
+          errors: error.errors || undefined,
+        });
+        
+        throw error;
       }
     }
 
     if (!response.ok && response.status !== 200 && response.status !== 201) {
       const errorData = await response.json().catch(() => ({
         message: `Error ${response.status}: ${response.statusText}`,
+        code: response.status,
       }));
-      throw new Error(errorData.message || `Error ${response.status}`);
+      
+      const error = {
+        message: errorData.message || `Error ${response.status}`,
+        code: response.status,
+        errors: errorData.errors || null,
+      };
+      
+      // Disparar error global (excepto para FCM que se maneja específicamente)
+      // Verificar si es el endpoint de FCM
+      const isFcmEndpoint = endpoint.includes('/fcm-token');
+      if (!isFcmEndpoint) {
+        triggerGlobalError({
+          title: 'Error en la petición',
+          message: error.message,
+          code: error.code,
+          errors: error.errors || undefined,
+        });
+      }
+      
+      throw error;
     }
 
     return response.json();
@@ -485,11 +575,47 @@ class ApiService {
     });
   }
 
-  async registerFcmToken(request: { fcmToken: string }): Promise<QrResponse<null>> {
-    return this.request<null>('/backoffice/api/user/fcm-token', {
-      method: 'POST',
-      body: JSON.stringify(request),
+  async registerFcmToken(request: { fcmToken: string; platform?: string; deviceLabel?: string }): Promise<QrResponse<null>> {
+    console.log('📤 [API] registerFcmToken llamado con:', {
+      fcmToken: request.fcmToken?.substring(0, 30) + '...',
+      platform: request.platform,
+      deviceLabel: request.deviceLabel?.substring(0, 50) + '...'
     });
+
+    // Importar funciones de Firebase dinámicamente
+    const { getPlatform } = await import('./firebase');
+    
+    const body: UserFcmTokenRequest = {
+      fcmToken: request.fcmToken,
+      platform: request.platform || getPlatform(),
+      deviceLabel: request.deviceLabel || navigator.userAgent || 'Unknown Device',
+    };
+
+    console.log('📤 [API] Body a enviar:', {
+      fcmToken: body.fcmToken?.substring(0, 30) + '...',
+      platform: body.platform,
+      deviceLabel: body.deviceLabel?.substring(0, 50) + '...'
+    });
+
+    const endpoint = '/backoffice/api/user/fcm-token';
+    console.log('📤 [API] Endpoint:', endpoint);
+    console.log('📤 [API] Base URL:', this.baseUrl);
+    console.log('📤 [API] URL completa:', `${this.baseUrl}${endpoint}`);
+
+    try {
+      const response = await this.request<null>(endpoint, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      });
+      console.log('✅ [API] registerFcmToken respuesta exitosa:', response);
+      return response;
+    } catch (error: any) {
+      console.error('❌ [API] Error en registerFcmToken:', error);
+      // Para errores de FCM, no disparar error global automáticamente
+      // porque se maneja específicamente en AuthContext
+      // Solo re-lanzar el error para que AuthContext lo capture
+      throw error;
+    }
   }
 
   // Session methods

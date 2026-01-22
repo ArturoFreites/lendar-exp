@@ -3,6 +3,15 @@ import { createApiService, AuthResponse } from '../services/api';
 import { initializeFirebase, initializeMessaging, getFCMToken, getPlatform } from '../services/firebase';
 import { toast } from 'sonner';
 
+// Importar useErrorSafe de forma segura
+let useErrorSafe: (() => { showError: (error: any) => void } | null) | null = null;
+try {
+  const errorContextModule = require('./ErrorContext');
+  useErrorSafe = errorContextModule.useErrorSafe;
+} catch {
+  // ErrorContext no disponible
+}
+
 export type Environment = 'production' | 'development';
 
 interface User {
@@ -38,6 +47,10 @@ const STORAGE_KEYS = {
 };
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  // Intentar obtener el contexto de errores de forma segura
+  const errorContext = useErrorSafe ? useErrorSafe() : null;
+  const showError = errorContext?.showError || null;
+
   // Cargar estado inicial desde localStorage
   const [user, setUser] = useState<User | null>(() => {
     try {
@@ -152,7 +165,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         );
       }
       
-      throw error;
+      // Si no es requerido, retornar null en lugar de lanzar el error
+      console.warn('⚠️ [FCM] Token FCM no obtenido (no requerido), retornando null');
+      return null;
     }
   };
 
@@ -194,8 +209,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         toast.success('¡Bienvenido al sistema!');
 
-        // 4. Registrar FCM en background (no bloqueante)
-        registerFcmTokenInBackground(service);
+        // 4. Registrar FCM después del login (no bloqueante, como petición normal)
+        // Ejecutar de forma asíncrona sin await para no bloquear, pero capturar errores
+        registerFcmTokenAfterLogin(service).catch((err) => {
+          console.error('❌ [FCM] Error no capturado en registerFcmTokenAfterLogin:', err);
+        });
       } else {
         console.error('❌ [LOGIN] Error en respuesta:', response.message);
         throw new Error(response.message || 'Error al iniciar sesión');
@@ -209,32 +227,85 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   /**
-   * Registra el token FCM en background después del login (no bloqueante)
+   * Registra el token FCM después del login (similar a login, pero no bloqueante)
+   * Se ejecuta como una petición normal usando el mismo servicio API
    */
-  const registerFcmTokenInBackground = async (service: ReturnType<typeof createApiService>) => {
-    console.log('🔔 [FCM] Iniciando registro de token FCM en background...');
+  const registerFcmTokenAfterLogin = async (service: ReturnType<typeof createApiService>) => {
+    console.log('🔔 [FCM] Iniciando registro de token FCM después del login...');
     
-    // Ejecutar en background sin bloquear
-    (async () => {
+    try {
+      // Pequeño delay para asegurar que Firebase esté completamente inicializado
+      console.log('🔔 [FCM] Esperando inicialización de Firebase...');
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      console.log('🔔 [FCM] Intentando obtener token FCM...');
+      
+      // Intentar obtener token FCM con timeout y no requerido
+      let fcmToken: string | null = null;
       try {
-        // Intentar obtener token FCM con timeout más corto y no requerido
-        const fcmToken = await getFCMTokenWithTimeout(10000, false).catch(() => null);
-        
-        if (!fcmToken) {
-          console.warn('⚠️ [FCM] No se pudo obtener token FCM, se registrará más tarde');
-          return;
-        }
-
-        console.log('✅ [FCM] Token FCM obtenido, registrando en backend...');
-        
-        // Registrar token FCM en el backend
-        await service.registerFcmToken({ fcmToken });
-        console.log('✅ [FCM] Token FCM registrado exitosamente en el backend');
-      } catch (error) {
-        // No mostrar error al usuario, solo log
-        console.error('❌ [FCM] Error registrando token FCM (no crítico):', error);
+        fcmToken = await getFCMTokenWithTimeout(10000, false);
+      } catch (err) {
+        console.warn('⚠️ [FCM] Error obteniendo token:', err);
+        fcmToken = null;
       }
-    })();
+      
+      if (!fcmToken) {
+        console.warn('⚠️ [FCM] No se pudo obtener token FCM, se registrará más tarde');
+        return;
+      }
+
+      console.log('✅ [FCM] Token FCM obtenido:', fcmToken.substring(0, 30) + '...');
+      console.log('🔔 [FCM] Preparando petición al backend (igual que login)...');
+      
+      // Registrar token FCM en el backend con platform (igual que login)
+      const platform = getPlatform();
+      const deviceLabel = navigator.userAgent || 'Unknown Device';
+      
+      console.log('🔔 [FCM] Datos a enviar:', {
+        fcmToken: fcmToken.substring(0, 30) + '...',
+        platform,
+        deviceLabel: deviceLabel.substring(0, 50) + '...'
+      });
+      
+      console.log('📤 [FCM] Enviando petición POST a /backoffice/api/user/fcm-token');
+      console.log('📤 [FCM] Usando el mismo servicio API que login');
+      
+      // Llamar directamente al método del servicio, igual que login
+      // Esta es la misma forma que se hace login: service.login()
+      const response = await service.registerFcmToken({ 
+        fcmToken,
+        platform,
+        deviceLabel
+      });
+      
+      console.log('✅ [FCM] Respuesta del backend recibida:', response);
+      console.log('✅ [FCM] Código de respuesta:', response.code);
+      console.log('✅ [FCM] Mensaje:', response.message);
+      console.log('✅ [FCM] Token FCM registrado exitosamente en el backend');
+    } catch (error: any) {
+      console.error('❌ [FCM] Error registrando token FCM:', error);
+      console.error('❌ [FCM] Tipo de error:', error?.constructor?.name);
+      console.error('❌ [FCM] Detalles del error:', {
+        message: error?.message,
+        code: error?.code,
+        errors: error?.errors,
+        stack: error?.stack
+      });
+      
+      // Mostrar error específico para FCM
+      const errorInfo = {
+        title: 'Error al registrar notificaciones push',
+        message: error?.message || 'No se pudo registrar el token FCM. Las notificaciones push pueden no funcionar correctamente. Puedes intentar recargar la página.',
+        code: error?.code,
+        errors: error?.errors,
+      };
+      
+      if (showError) {
+        showError(errorInfo);
+      } else {
+        toast.error(errorInfo.message);
+      }
+    }
   };
 
   const logout = async () => {
@@ -284,6 +355,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     </AuthContext.Provider>
   );
 }
+
 
 export function useAuth() {
   const context = useContext(AuthContext);
