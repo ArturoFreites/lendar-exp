@@ -12,7 +12,7 @@ try {
   // ErrorContext no disponible
 }
 
-export type Environment = 'production' | 'development' | 'local';
+export type Environment = 'production' | 'development';
 
 interface User {
   id: number;
@@ -38,7 +38,6 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const API_URLS: Record<Environment, string> = {
   production: import.meta.env.VITE_API_URL_PROD || 'https://api.empresa.com',
   development: import.meta.env.VITE_API_URL_DEV || 'http://localhost:8080',
-  local: import.meta.env.VITE_API_URL_LOCAL || 'http://localhost:8080',
 };
 
 const STORAGE_KEYS = {
@@ -64,6 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [environment, setEnvironment] = useState<Environment>(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEYS.ENVIRONMENT);
+      if (stored === 'local') return 'development';
       return (stored as Environment) || 'development';
     } catch {
       return 'development';
