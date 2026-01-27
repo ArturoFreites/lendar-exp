@@ -170,6 +170,61 @@ export interface TaskTypeRoleRequest {
   taskTypeId: number;
 }
 
+// Application (registro de ingresos / solicitudes)
+export interface ApplicationResponse {
+  id: number;
+  createdAt: string;
+  updatedAt: string;
+  quotaValue: number | null;
+  amount: number | null;
+  percentageAmount: number | null;
+  term: string | null;
+  propertyValue: number | null;
+  reserved: boolean | null;
+  officeRemaxName: string | null;
+  operationType: string | null;
+  remaxContact: boolean | null;
+  propertyRemax: boolean | null;
+  spouse: string | null;
+  taskTypeName: string | null;
+  stage: string | null;
+  status: string | null;
+  subStatus: string | null;
+  reason: string | null;
+  contractUrl: string | null;
+  applicationConfigId: number | null;
+  region: Record<string, unknown> | null;
+  notaryOffice: Record<string, unknown> | null;
+  clients: ApplicationClientResponse[] | null;
+  cbu: string | null;
+  bcraBackground: boolean | null;
+  politicallyExposed: boolean | null;
+  civilStatus: string | null;
+  residenceAddress: Record<string, unknown> | null;
+}
+
+export interface ApplicationClientResponse {
+  client: Record<string, unknown>;
+  role: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+}
+
+export interface ApplicationFindResponse extends ApplicationResponse {
+  fee?: number;
+}
+
+// Application Received (entradas del application-receiver)
+export interface ApplicationReceivedResponse {
+  id: number;
+  detail: string | null;
+  status: string | null;
+  content: Record<string, unknown> | null;
+  createdAt: string;
+}
+
 export interface AuthSessionResponse {
   familyId: string;
   userId: number;
@@ -735,6 +790,74 @@ class ApiService {
     return this.request<null>('/backoffice/api/permits', {
       method: 'POST',
       body: JSON.stringify(request),
+    });
+  }
+
+  // Application (registro de ingresos) methods
+  async getApplications(params?: Record<string, string>): Promise<QrResponse<PaginationResponse<ApplicationResponse>>> {
+    const queryString = params ? new URLSearchParams(params).toString() : '';
+    const endpoint = `/backoffice/api/application${queryString ? `?${queryString}` : ''}`;
+
+    const response = await this.request<BackendPaginationResponse<ApplicationResponse>>(endpoint, {
+      method: 'GET',
+    });
+
+    if (response.data) {
+      return {
+        ...response,
+        data: this.normalizePaginationResponse(response.data),
+      };
+    }
+
+    return {
+      ...response,
+      data: null,
+    };
+  }
+
+  async getApplicationById(applicationId: number): Promise<QrResponse<ApplicationFindResponse>> {
+    return this.request<ApplicationFindResponse>(`/backoffice/api/application/${applicationId}`, {
+      method: 'GET',
+    });
+  }
+
+  // Application Received (application-receiver) methods.
+  // Params may include page, size, sort, and filter ops: eq, contains, gte, lte (e.g. eq=status:ok, contains=detail:text, gte=createdAt:ISO, lte=createdAt:ISO).
+  async getApplicationsReceived(params?: Record<string, string | string[]>) {
+    let queryString = '';
+    if (params && Object.keys(params).length > 0) {
+      const searchParams = new URLSearchParams();
+      for (const [key, value] of Object.entries(params)) {
+        if (value === undefined || value === '') continue;
+        const values = Array.isArray(value) ? value : [value];
+        for (const v of values) {
+          if (v !== undefined && v !== '') searchParams.append(key, v);
+        }
+      }
+      queryString = searchParams.toString();
+    }
+    const endpoint = `/backoffice/api/application-received${queryString ? `?${queryString}` : ''}`;
+
+    const response = await this.request<BackendPaginationResponse<ApplicationReceivedResponse>>(endpoint, {
+      method: 'GET',
+    });
+
+    if (response.data) {
+      return {
+        ...response,
+        data: this.normalizePaginationResponse(response.data),
+      };
+    }
+
+    return {
+      ...response,
+      data: null,
+    };
+  }
+
+  async getApplicationReceivedById(id: number): Promise<QrResponse<ApplicationReceivedResponse>> {
+    return this.request<ApplicationReceivedResponse>(`/backoffice/api/application-received/${id}`, {
+      method: 'GET',
     });
   }
 }

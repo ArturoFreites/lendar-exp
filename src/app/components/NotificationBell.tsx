@@ -178,28 +178,28 @@ export function NotificationBell() {
       </PopoverTrigger>
       <PopoverContent 
         align="end" 
-        className="w-[420px] p-0 bg-white border-[#4a494d]/20 shadow-xl"
+        className="w-[90vw] max-w-[420px] sm:w-[420px] p-0 bg-white border-[#4a494d]/20 shadow-xl"
         sideOffset={8}
       >
-        <div className="flex flex-col h-[650px]">
+        <div className="flex flex-col max-h-[85vh] sm:max-h-[650px] h-[85vh] sm:h-[650px]">
           {/* Header */}
-          <div className="flex flex-col gap-3 p-4 border-b border-[#4a494d]/20 bg-gradient-to-r from-[#fefeff] to-[#f8f9fa]">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Bell className="h-5 w-5 text-[#55c3c5]" />
-                <h3 className="font-semibold text-[#3b3a3e]">Notificaciones</h3>
+          <div className="flex flex-col gap-2 sm:gap-3 p-3 sm:p-4 border-b border-[#4a494d]/20 bg-gradient-to-r from-[#fefeff] to-[#f8f9fa] flex-shrink-0">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+                <Bell className="h-4 w-4 sm:h-5 sm:w-5 text-[#55c3c5] flex-shrink-0" />
+                <h3 className="font-semibold text-sm sm:text-base text-[#3b3a3e] truncate">Notificaciones</h3>
                 {unreadCount > 0 && (
-                  <Badge className="bg-[#55c3c5] text-white text-xs">
+                  <Badge className="bg-[#55c3c5] text-white text-[10px] sm:text-xs flex-shrink-0">
                     {unreadCount} nueva{unreadCount !== 1 ? 's' : ''}
                   </Badge>
                 )}
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
                 {/* Indicador de estado de conexión */}
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <div className={cn(
-                      "h-2 w-2 rounded-full transition-all cursor-help",
+                      "h-2 w-2 rounded-full transition-all cursor-help flex-shrink-0",
                       isConnected ? "bg-green-500" : "bg-yellow-500 animate-pulse"
                     )} />
                   </TooltipTrigger>
@@ -217,11 +217,11 @@ export function NotificationBell() {
                     variant="ghost"
                     size="sm"
                     onClick={handleMarkAllAsRead}
-                    className="h-8 px-2 text-xs text-[#6b6a6e] hover:text-[#3b3a3e]"
+                    className="h-7 sm:h-8 px-1.5 sm:px-2 text-[10px] sm:text-xs text-[#6b6a6e] hover:text-[#3b3a3e]"
                     title="Marcar todas como leídas"
                   >
-                    <CheckCheck className="h-4 w-4 mr-1" />
-                    Todas
+                    <CheckCheck className="h-3.5 w-3.5 sm:h-4 sm:w-4 sm:mr-1" />
+                    <span className="hidden sm:inline">Todas</span>
                   </Button>
                 )}
                 <Button
@@ -229,13 +229,13 @@ export function NotificationBell() {
                   size="sm"
                   onClick={refreshNotifications}
                   disabled={loading}
-                  className="h-8 w-8 p-0"
+                  className="h-7 w-7 sm:h-8 sm:w-8 p-0 flex-shrink-0"
                   title="Actualizar"
                 >
                   {loading ? (
-                    <Loader2 className="h-4 w-4 animate-spin text-[#55c3c5]" />
+                    <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin text-[#55c3c5]" />
                   ) : (
-                    <span className="text-[#6b6a6e] hover:text-[#3b3a3e]">↻</span>
+                    <span className="text-[#6b6a6e] hover:text-[#3b3a3e] text-sm sm:text-base">↻</span>
                   )}
                 </Button>
               </div>
@@ -243,19 +243,19 @@ export function NotificationBell() {
 
             {/* Búsqueda */}
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#9b9a9e]" />
+              <Search className="absolute left-2.5 sm:left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-[#9b9a9e]" />
               <Input
                 placeholder="Buscar notificaciones..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 h-9 text-sm bg-white border-[#4a494d]/20 focus:border-[#55c3c5]"
+                className="pl-8 sm:pl-9 h-8 sm:h-9 text-xs sm:text-sm bg-white border-[#4a494d]/20 focus:border-[#55c3c5]"
               />
               {searchQuery && (
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 sm:h-7 sm:w-7 p-0"
                 >
                   <X className="h-3 w-3" />
                 </Button>
@@ -264,22 +264,28 @@ export function NotificationBell() {
 
             {/* Filtros */}
             <Tabs value={filter} onValueChange={(v) => setFilter(v as FilterType)} className="w-full">
-              <TabsList className="grid w-full grid-cols-3 h-8 bg-[#f8f9fa]">
-                <TabsTrigger value="all" className="text-xs">
-                  Todas ({notifications.length})
+              <TabsList className="grid w-full grid-cols-3 h-8 sm:h-9 bg-[#f8f9fa]">
+                <TabsTrigger value="all" className="text-[10px] sm:text-xs px-1 sm:px-3">
+                  <span className="sm:hidden">Todas</span>
+                  <span className="hidden sm:inline">Todas</span>
+                  <span className="ml-1">({notifications.length})</span>
                 </TabsTrigger>
-                <TabsTrigger value="unread" className="text-xs">
-                  No leídas ({unreadNotifications.length})
+                <TabsTrigger value="unread" className="text-[10px] sm:text-xs px-1 sm:px-3">
+                  <span className="sm:hidden">No</span>
+                  <span className="hidden sm:inline">No leídas</span>
+                  <span className="ml-1">({unreadNotifications.length})</span>
                 </TabsTrigger>
-                <TabsTrigger value="read" className="text-xs">
-                  Leídas ({notifications.length - unreadNotifications.length})
+                <TabsTrigger value="read" className="text-[10px] sm:text-xs px-1 sm:px-3">
+                  <span className="sm:hidden">Sí</span>
+                  <span className="hidden sm:inline">Leídas</span>
+                  <span className="ml-1">({notifications.length - unreadNotifications.length})</span>
                 </TabsTrigger>
               </TabsList>
             </Tabs>
           </div>
 
           {/* Notifications List */}
-          <ScrollArea className="flex-1">
+          <ScrollArea className="flex-1 min-h-0" style={{ maxHeight: '100%' }}>
             {loading && notifications.length === 0 ? (
               <div className="p-4 space-y-3">
                 {[1, 2, 3].map((i) => (
@@ -325,7 +331,7 @@ export function NotificationBell() {
                 )}
               </div>
             ) : (
-              <div className="p-2">
+              <div className="p-2 sm:p-3">
                 {Object.entries(groupedNotifications).map(([groupName, groupNotifications]) => {
                   if (groupNotifications.length === 0) return null;
 
@@ -339,12 +345,12 @@ export function NotificationBell() {
 
                   return (
                     <div key={groupName} className="mb-4">
-                      <div className="flex items-center gap-2 px-3 py-2 mb-2">
-                        <Calendar className="h-3.5 w-3.5 text-[#9b9a9e]" />
-                        <span className="text-xs font-semibold text-[#6b6a6e] uppercase tracking-wide">
+                      <div className="flex items-center gap-2 px-2 sm:px-3 py-2 mb-2">
+                        <Calendar className="h-3.5 w-3.5 text-[#9b9a9e] flex-shrink-0" />
+                        <span className="text-[10px] sm:text-xs font-semibold text-[#6b6a6e] uppercase tracking-wide">
                           {groupLabels[groupName]}
                         </span>
-                        <Badge variant="outline" className="text-xs h-5 px-1.5 ml-auto border-[#4a494d]/20">
+                        <Badge variant="outline" className="text-[10px] sm:text-xs h-5 px-1.5 ml-auto border-[#4a494d]/20">
                           {groupNotifications.length}
                         </Badge>
                       </div>
@@ -359,7 +365,7 @@ export function NotificationBell() {
                             <div
                               key={notification.id}
                               className={cn(
-                                "group relative p-3 rounded-lg transition-all duration-200 cursor-pointer",
+                                "group relative p-2 sm:p-3 rounded-lg transition-all duration-200 cursor-pointer",
                                 "hover:bg-[#f8f9fa] hover:shadow-sm",
                                 isUnread 
                                   ? "bg-[#55c3c5]/5 border-l-2 border-l-[#55c3c5]" 
@@ -371,21 +377,21 @@ export function NotificationBell() {
                                 }
                               }}
                             >
-                              <div className="flex items-start gap-3">
+                              <div className="flex items-start gap-2 sm:gap-3">
                                 {/* Icono */}
                                 <div className={cn(
-                                  "h-9 w-9 rounded-lg flex items-center justify-center flex-shrink-0",
+                                  "h-8 w-8 sm:h-9 sm:w-9 rounded-lg flex items-center justify-center flex-shrink-0",
                                   iconColor,
                                   "text-white shadow-sm"
                                 )}>
-                                  <Icon className="h-4 w-4" />
+                                  <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                                 </div>
 
                                 {/* Contenido */}
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-start justify-between gap-2 mb-1">
                                     <h4 className={cn(
-                                      "font-semibold text-sm leading-tight",
+                                      "font-semibold text-xs sm:text-sm leading-tight break-words",
                                       isUnread ? "text-[#3b3a3e]" : "text-[#6b6a6e]"
                                     )}>
                                       {notification.title}
@@ -394,13 +400,13 @@ export function NotificationBell() {
                                       <div className="h-2 w-2 rounded-full bg-[#55c3c5] flex-shrink-0 mt-1.5 animate-pulse" />
                                     )}
                                   </div>
-                                  <p className="text-sm text-[#6b6a6e] mb-2 line-clamp-2 leading-relaxed">
+                                  <p className="text-xs sm:text-sm text-[#6b6a6e] mb-2 line-clamp-2 leading-relaxed break-words">
                                     {notification.message}
                                   </p>
-                                  <div className="flex items-center gap-2 text-xs text-[#9b9a9e]">
+                                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-[10px] sm:text-xs text-[#9b9a9e]">
                                     <div className="flex items-center gap-1">
-                                      <Clock className="h-3 w-3" />
-                                      <span>
+                                      <Clock className="h-3 w-3 flex-shrink-0" />
+                                      <span className="whitespace-nowrap">
                                         {isToday(new Date(notification.createdAt))
                                           ? formatDistanceToNow(new Date(notification.createdAt), { 
                                               addSuffix: true, 
@@ -412,7 +418,7 @@ export function NotificationBell() {
                                     </div>
                                     <Badge 
                                       variant="outline" 
-                                      className="text-xs border-[#4a494d]/20 px-1.5 py-0"
+                                      className="text-[10px] sm:text-xs border-[#4a494d]/20 px-1.5 py-0"
                                     >
                                       {notification.type}
                                     </Badge>
@@ -425,7 +431,7 @@ export function NotificationBell() {
                                     variant="ghost"
                                     size="sm"
                                     className={cn(
-                                      "h-7 w-7 p-0 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity",
+                                      "h-6 w-6 sm:h-7 sm:w-7 p-0 flex-shrink-0 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity",
                                       "hover:bg-[#55c3c5]/10"
                                     )}
                                     onClick={(e) => {
@@ -436,9 +442,9 @@ export function NotificationBell() {
                                     title="Marcar como leída"
                                   >
                                     {isMarking ? (
-                                      <Loader2 className="h-3.5 w-3.5 animate-spin text-[#55c3c5]" />
+                                      <Loader2 className="h-3 w-3 sm:h-3.5 sm:w-3.5 animate-spin text-[#55c3c5]" />
                                     ) : (
-                                      <Check className="h-3.5 w-3.5 text-[#55c3c5]" />
+                                      <Check className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-[#55c3c5]" />
                                     )}
                                   </Button>
                                 )}
@@ -456,10 +462,10 @@ export function NotificationBell() {
 
           {/* Footer */}
           {hasNotifications && (
-            <div className="p-3 border-t border-[#4a494d]/20 bg-[#f8f9fa]">
+            <div className="p-2 sm:p-3 border-t border-[#4a494d]/20 bg-[#f8f9fa] flex-shrink-0">
               <Button
                 variant="ghost"
-                className="w-full text-sm text-[#55c3c5] hover:text-[#4ab3b5] hover:bg-[#55c3c5]/10"
+                className="w-full text-xs sm:text-sm text-[#55c3c5] hover:text-[#4ab3b5] hover:bg-[#55c3c5]/10"
                 onClick={() => {
                   setOpen(false);
                   window.location.hash = '#notificaciones';
