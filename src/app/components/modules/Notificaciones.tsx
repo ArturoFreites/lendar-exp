@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNotifications } from '../../contexts/NotificationContext';
 import { 
@@ -71,7 +71,8 @@ export function Notificaciones() {
   
   // Config search state
   const [configSearch, setConfigSearch] = useState('');
-  
+  const configSearchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // User search state
   const [userIdSearch, setUserIdSearch] = useState('');
   const [userProfile, setUserProfile] = useState<UserProfileResponse | null>(null);
@@ -115,9 +116,9 @@ export function Notificaciones() {
         page: page.toString(),
         size: '10',
       };
-      
+      // Backend BaseRepository espera operador "contains" con "field:value" para LIKE %value%
       if (search && search.trim()) {
-        params.key = search.trim();
+        params.contains = `key:${search.trim()}`;
       }
 
       const response = await apiService.getNotificationConfigs(params);
@@ -168,10 +169,29 @@ export function Notificaciones() {
     setRefreshing(false);
   };
 
-  const handleConfigSearch = async (searchValue: string) => {
-    setConfigSearch(searchValue);
+  const runConfigSearch = (searchValue: string) => {
     setCurrentPage(0);
-    await loadNotificationConfigs(0, searchValue);
+    loadNotificationConfigs(0, searchValue);
+  };
+
+  const handleConfigSearch = (searchValue: string) => {
+    setConfigSearch(searchValue);
+    if (configSearchDebounceRef.current) {
+      clearTimeout(configSearchDebounceRef.current);
+      configSearchDebounceRef.current = null;
+    }
+    configSearchDebounceRef.current = setTimeout(() => {
+      configSearchDebounceRef.current = null;
+      runConfigSearch(searchValue);
+    }, 300);
+  };
+
+  const handleConfigSearchSubmit = () => {
+    if (configSearchDebounceRef.current) {
+      clearTimeout(configSearchDebounceRef.current);
+      configSearchDebounceRef.current = null;
+    }
+    runConfigSearch(configSearch);
   };
 
   // Sincronizar notificaciones del contexto cuando cambian
@@ -321,6 +341,14 @@ export function Notificaciones() {
     }
   }, [contextNotifications, activeTab]);
 
+  useEffect(() => {
+    return () => {
+      if (configSearchDebounceRef.current) {
+        clearTimeout(configSearchDebounceRef.current);
+      }
+    };
+  }, []);
+
   return (
     <div className="space-y-6 p-8">
       <div className="flex items-center justify-between">
@@ -454,17 +482,28 @@ export function Notificaciones() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="mb-4">
-                <div className="relative">
+              <div className="mb-4 flex gap-2">
+                <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#6b6a6e]" />
                   <Input
                     type="text"
                     placeholder="Buscar por clave..."
                     value={configSearch}
                     onChange={(e) => handleConfigSearch(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleConfigSearchSubmit())}
                     className="pl-10"
                   />
                 </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleConfigSearchSubmit}
+                  disabled={configLoading}
+                  className="gap-2 shrink-0"
+                >
+                  <Search className="h-4 w-4" />
+                  Buscar
+                </Button>
               </div>
               {configLoading ? (
                 <div className="text-center py-8 text-[#6b6a6e]">Cargando configuraciones...</div>
