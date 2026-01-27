@@ -5,7 +5,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from './ui/card';
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
-import { Server, Zap, Lock, User } from 'lucide-react';
+import { Server, Zap, Lock, User, Home } from 'lucide-react';
 import { toast } from 'sonner';
 import logoImage from '../../assets/65d1f35782e19a4a8c4d56fc288c48d07bab3eaa.png';
 
@@ -53,8 +53,24 @@ export function Login() {
                 <RadioGroup
                   value={environment}
                   onValueChange={(value) => setEnvironment(value as Environment)}
-                  className="grid grid-cols-2 gap-3"
+                  className="grid grid-cols-3 gap-3"
                 >
+                  <div>
+                    <RadioGroupItem
+                      value="local"
+                      id="local"
+                      className="peer sr-only"
+                    />
+                    <Label
+                      htmlFor="local"
+                      className="flex flex-col items-center justify-center rounded-xl border-2 border-[#e8eaed] bg-white p-5 hover:border-[#55c3c5] hover:bg-[#55c3c5]/[0.02] hover:scale-105 peer-data-[state=checked]:border-[#55c3c5] peer-data-[state=checked]:bg-[#55c3c5]/[0.04] peer-data-[state=checked]:shadow-lg peer-data-[state=checked]:shadow-[#55c3c5]/10 cursor-pointer transition-all duration-300"
+                    >
+                      <div className="p-3 rounded-xl bg-[#55c3c5]/10 mb-3">
+                        <Home className="h-5 w-5 text-[#55c3c5]" />
+                      </div>
+                      <span className="font-semibold text-[#3b3a3e] text-sm">Local</span>
+                    </Label>
+                  </div>
                   <div>
                     <RadioGroupItem
                       value="development"

@@ -69,6 +69,9 @@ export function Notificaciones() {
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
   
+  // Config search state
+  const [configSearch, setConfigSearch] = useState('');
+  
   // User search state
   const [userIdSearch, setUserIdSearch] = useState('');
   const [userProfile, setUserProfile] = useState<UserProfileResponse | null>(null);
@@ -158,11 +161,17 @@ export function Notificaciones() {
       await loadNotifications();
       await refreshContextNotifications(); // Sincronizar con el contexto
     } else if (activeTab === 'configuraciones') {
-      await loadNotificationConfigs(currentPage);
+      await loadNotificationConfigs(0, configSearch);
     } else if (activeTab === 'buscador' && userIdSearch) {
       await handleUserSearch();
     }
     setRefreshing(false);
+  };
+
+  const handleConfigSearch = async (searchValue: string) => {
+    setConfigSearch(searchValue);
+    setCurrentPage(0);
+    await loadNotificationConfigs(0, searchValue);
   };
 
   // Sincronizar notificaciones del contexto cuando cambian
@@ -226,7 +235,7 @@ export function Notificaciones() {
         if (response.code === 200) {
           toast.success('Configuración actualizada correctamente');
           setIsConfigDialogOpen(false);
-          await loadNotificationConfigs(currentPage);
+          await loadNotificationConfigs(currentPage, configSearch);
         } else {
           toast.error(response.message || 'Error al actualizar configuración');
         }
@@ -235,7 +244,7 @@ export function Notificaciones() {
         if (response.code === 200) {
           toast.success('Configuración creada correctamente');
           setIsConfigDialogOpen(false);
-          await loadNotificationConfigs(currentPage);
+          await loadNotificationConfigs(currentPage, configSearch);
         } else {
           toast.error(response.message || 'Error al crear configuración');
         }
@@ -252,7 +261,7 @@ export function Notificaciones() {
       const response = await apiService.updateNotificationConfigActive(config.id, !config.active);
       if (response.code === 200) {
         toast.success(`Configuración ${!config.active ? 'activada' : 'desactivada'} correctamente`);
-        await loadNotificationConfigs(currentPage);
+        await loadNotificationConfigs(currentPage, configSearch);
       } else {
         toast.error(response.message || 'Error al actualizar estado');
       }
@@ -300,7 +309,7 @@ export function Notificaciones() {
     if (activeTab === 'notificaciones') {
       loadNotifications();
     } else if (activeTab === 'configuraciones') {
-      loadNotificationConfigs();
+      loadNotificationConfigs(0, configSearch);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, apiService]);
@@ -445,6 +454,18 @@ export function Notificaciones() {
               </div>
             </CardHeader>
             <CardContent>
+              <div className="mb-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#6b6a6e]" />
+                  <Input
+                    type="text"
+                    placeholder="Buscar por clave..."
+                    value={configSearch}
+                    onChange={(e) => handleConfigSearch(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+              </div>
               {configLoading ? (
                 <div className="text-center py-8 text-[#6b6a6e]">Cargando configuraciones...</div>
               ) : notificationConfigs.length === 0 ? (
@@ -533,7 +554,7 @@ export function Notificaciones() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => loadNotificationConfigs(currentPage - 1)}
+                          onClick={() => loadNotificationConfigs(currentPage - 1, configSearch)}
                           disabled={currentPage === 0 || configLoading}
                         >
                           Anterior
@@ -541,7 +562,7 @@ export function Notificaciones() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => loadNotificationConfigs(currentPage + 1)}
+                          onClick={() => loadNotificationConfigs(currentPage + 1, configSearch)}
                           disabled={currentPage >= totalPages - 1 || configLoading}
                         >
                           Siguiente
