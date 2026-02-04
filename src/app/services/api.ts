@@ -1,4 +1,5 @@
 import { triggerGlobalError } from '../utils/globalErrorHandler';
+import { triggerSessionInvalid } from '../utils/sessionInvalidHandler';
 
 interface QrResponse<T> {
   data: T | null;
@@ -84,6 +85,36 @@ export interface NotificationConfigResponse {
   active: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface EmailConfigRequest {
+  key: string;
+  description?: string | null;
+  subjectTemplate: string;
+  bodyTemplate: string;
+}
+
+export interface EmailConfigResponse {
+  id: number;
+  key: string;
+  description: string | null;
+  subjectTemplate: string;
+  bodyTemplate: string;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EmailLayoutConfigRequest {
+  headerHtml: string;
+  footerHtml: string;
+}
+
+export interface EmailLayoutConfigResponse {
+  id: number | null;
+  headerHtml: string;
+  footerHtml: string;
+  updatedAt: string | null;
 }
 
 export interface UserProfileResponse {
@@ -405,38 +436,44 @@ class ApiService {
       throw error;
     }
 
-    // Si recibimos un 403 y no es el endpoint de refresh ni login, intentar refrescar el token
-    if (response.status === 403 && retryOn403 && !endpoint.includes('/auth/refresh') && !endpoint.includes('/auth/login')) {
-      // Guardar el error original antes de intentar refresh
+    // Si recibimos 401 o 403 (token expirado/inválido) y no es refresh ni login, intentar refrescar el token
+    const isAuthError = (response.status === 401 || response.status === 403) && retryOn403
+      && !endpoint.includes('/auth/refresh') && !endpoint.includes('/auth/login');
+
+    if (isAuthError) {
       const errorDataPromise = response.json().catch(() => ({
         message: `Error ${response.status}: ${response.statusText}`,
         code: response.status,
+        errors: undefined as string[] | undefined,
       }));
-      
+
       const refreshSuccess = await this.refreshToken();
-      
+
       if (refreshSuccess) {
-        // Reintentar la petición original una vez
         return this.request<T>(endpoint, options, false);
-      } else {
-        // Si el refresh falla, lanzar el error original
-        const errorData = await errorDataPromise;
-        const error = {
-          message: errorData.message || `Error ${response.status}: Token expirado. Por favor, inicia sesión nuevamente.`,
-          code: response.status,
-          errors: errorData.errors,
-        };
-        
-        // Disparar error global
-        triggerGlobalError({
-          title: 'Error de autenticación',
-          message: error.message,
-          code: error.code,
-          errors: error.errors || undefined,
-        });
-        
-        throw error;
       }
+
+      const errorData = await errorDataPromise;
+      const error = {
+        message: errorData.message || (response.status === 401
+          ? 'Sesión expirada. Por favor, inicia sesión nuevamente.'
+          : `Error ${response.status}: ${response.statusText}`),
+        code: response.status,
+        errors: errorData.errors ?? null,
+      };
+
+      triggerGlobalError({
+        title: 'Sesión inválida',
+        message: error.message,
+        code: error.code,
+        errors: error.errors || undefined,
+      });
+
+      if (response.status === 401) {
+        triggerSessionInvalid();
+      }
+
+      throw error;
     }
 
     if (!response.ok && response.status !== 200 && response.status !== 201) {
@@ -586,6 +623,57 @@ class ApiService {
       method: 'PUT',
       body: JSON.stringify(active),
     });
+  }
+
+  // EmailConfig methods
+  async getEmailConfigs(params?: Record<string, string>): Promise<QrResponse<PaginationResponse<EmailConfigResponse>>> {
+    const queryString = params ? new URLSearchParams(params).toString() : '';
+    const endpoint = `/backoffice/api/emailConfig${queryString ? `?${queryString}` : ''}`;
+    const response = await this.request<BackendPaginationResponse<EmailConfigResponse>>(endpoint, { method: 'GET' });
+    if (response.data) {
+      return { ...response, data: this.normalizePaginationResponse(response.data) };
+    }
+    return { ...response, data: null };
+  }
+
+  async getEmailConfigById(id: number): Promise<QrResponse<EmailConfigResponse>> {
+    return this.request<EmailConfigResponse>(`/backoffice/api/emailConfig/${id}`, { method: 'GET' });
+  }
+
+  async getEmailConfigByKey(key: string): Promise<QrResponse<EmailConfigResponse>> {
+    return this.request<EmailConfigResponse>(`/backoffice/api/emailConfig/key/${encodeURIComponent(key)}`, { method: 'GET' });
+  }
+
+  async createEmailConfig(request: EmailConfigRequest): Promise<QrResponse<null>> {
+    return this.request<null>('/backoffice/api/emailConfig', { method: 'POST', body: JSON.stringify(request) });
+  }
+
+  async updateEmailConfig(id: number, request: EmailConfigRequest): Promise<QrResponse<EmailConfigResponse>> {
+    return this.request<EmailConfigResponse>(`/backoffice/api/emailConfig/${id}`, { method: 'PUT', body: JSON.stringify(request) });
+  }
+
+  async updateEmailConfigActive(id: number, active: boolean): Promise<QrResponse<EmailConfigResponse>> {
+    return this.request<EmailConfigResponse>(`/backoffice/api/emailConfig/${id}/active`, { method: 'PUT', body: JSON.stringify(active) });
+  }
+
+  async sendEmailConfigTest(id: number, to: string): Promise<QrResponse<null>> {
+    return this.request<null>(`/backoffice/api/emailConfig/${id}/sendTest`, {
+      method: 'POST',
+      body: JSON.stringify({ to }),
+    });
+  }
+
+  // EmailLayoutConfig methods
+  async getEmailLayoutConfig(): Promise<QrResponse<EmailLayoutConfigResponse>> {
+    return this.request<EmailLayoutConfigResponse>('/backoffice/api/emailLayoutConfig', { method: 'GET' });
+  }
+
+  async getEmailLayoutConfigDefault(): Promise<QrResponse<EmailLayoutConfigResponse>> {
+    return this.request<EmailLayoutConfigResponse>('/backoffice/api/emailLayoutConfig/default', { method: 'GET' });
+  }
+
+  async updateEmailLayoutConfig(request: EmailLayoutConfigRequest): Promise<QrResponse<EmailLayoutConfigResponse>> {
+    return this.request<EmailLayoutConfigResponse>('/backoffice/api/emailLayoutConfig', { method: 'PUT', body: JSON.stringify(request) });
   }
 
   // User methods

@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { ErrorProvider } from './contexts/ErrorContext';
 import { Login } from './components/Login';
+import { SoloAdministradores } from './components/SoloAdministradores';
 import { Layout } from './components/Layout';
 import { Dashboard } from './components/modules/Dashboard';
 import { Ingresos } from './components/modules/Ingresos';
@@ -10,17 +11,25 @@ import { TareasLista } from './components/modules/TareasLista';
 import { TareaDetalle } from './components/modules/TareaDetalle';
 import { ConfigPrestamos } from './components/modules/ConfigPrestamos';
 import { Notificaciones } from './components/modules/Notificaciones';
+import { Emails } from './components/modules/Emails';
 import { Usuarios } from './components/modules/Usuarios';
 import { Toaster } from './components/ui/sonner';
 
+const ROLE_ADMIN = 'ADMIN';
+
 function AppContent() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const [currentModule, setCurrentModule] = useState('dashboard');
   const [selectedTareaId, setSelectedTareaId] = useState<string | null>(null);
   const [isCreatingTarea, setIsCreatingTarea] = useState(false);
 
   if (!isAuthenticated) {
     return <Login />;
+  }
+
+  const isAdmin = user?.roles?.some((r) => String(r).toUpperCase() === ROLE_ADMIN) ?? false;
+  if (!isAdmin) {
+    return <SoloAdministradores />;
   }
 
   const handleSelectTarea = (tareaId: string) => {
@@ -54,6 +63,8 @@ function AppContent() {
         return <ConfigPrestamos />;
       case 'notificaciones':
         return <Notificaciones />;
+      case 'emails':
+        return <Emails />;
       case 'usuarios':
         return <Usuarios />;
       default:
@@ -78,7 +89,13 @@ export default function App() {
       <AuthProvider>
         <NotificationProvider>
           <AppContent />
-          <Toaster />
+          <Toaster
+            position="top-center"
+            toastOptions={{
+              style: { maxWidth: 'min(90vw, 420px)', wordBreak: 'break-word' },
+              classNames: { description: 'break-words line-clamp-4' },
+            }}
+          />
         </NotificationProvider>
       </AuthProvider>
     </ErrorProvider>

@@ -17,14 +17,8 @@ import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
 import { Switch } from '../ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '../ui/dialog';
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '../ui/resizable';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
 import { 
   Bell, 
   Check, 
@@ -39,11 +33,46 @@ import {
   User,
   Mail,
   Calendar,
-  Shield
+  Shield,
+  ArrowLeft,
+  Save,
+  Eye,
+  BookOpen,
 } from 'lucide-react';
+import { EmailEditor } from './EmailEditor';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale/es';
+
+const PLACEHOLDERS_HELP = 'Usa las variables entre llaves; ver leyenda abajo.';
+
+/** Leyenda de variables para plantillas de notificación (título y mensaje). */
+const NOTIFICATION_PLACEHOLDERS_LEGEND: { category: string; items: { key: string; desc: string }[] }[] = [
+  { category: 'Tareas', items: [{ key: 'taskName', desc: 'Nombre de la tarea' }, { key: 'dueDate', desc: 'Fecha límite' }, { key: 'taskId', desc: 'ID de la tarea' }] },
+  { category: 'Usuario', items: [{ key: 'fullName', desc: 'Nombre y apellido' }, { key: 'userName', desc: 'Nombre de usuario' }] },
+  { category: 'Sistema', items: [{ key: 'year', desc: 'Año actual' }, { key: 'supportEmail', desc: 'Email de soporte' }] },
+  { category: 'Otros', items: [{ key: 'solicitante', desc: 'Nombre del solicitante' }, { key: 'url', desc: 'URL generada' }, { key: 'orderId', desc: 'ID de orden' }] },
+];
+
+/** Reemplaza placeholders {{key}} o {key} en un texto con valores de ejemplo para la vista previa. */
+function replacePlaceholdersForPreview(text: string): string {
+  if (!text || typeof text !== 'string') return text;
+  const samples: Record<string, string> = {
+    taskName: 'Verificación KYC',
+    dueDate: '15/03/2026',
+    taskId: '12345',
+    fullName: 'Usuario de ejemplo',
+    userName: 'usuario.ejemplo',
+    year: String(new Date().getFullYear()),
+    supportEmail: 'soporte@lendar.com',
+    solicitante: 'Juan Pérez',
+    url: 'https://app.lendar.com/tarea/123',
+    orderId: 'ORD-789',
+  };
+  return text
+    .replace(/\{\{(\w+)\}\}/g, (_, key) => samples[key] ?? `[${key}]`)
+    .replace(/\{(\w+)\}/g, (_, key) => samples[key] ?? `[${key}]`);
+}
 
 export function Notificaciones() {
   const { apiService } = useAuth();
@@ -56,7 +85,9 @@ export function Notificaciones() {
   const [activeTab, setActiveTab] = useState('notificaciones');
   
   // Config management state
-  const [isConfigDialogOpen, setIsConfigDialogOpen] = useState(false);
+  const [configEditorFullScreen, setConfigEditorFullScreen] = useState<null | 'new' | number>(null);
+  const [configSaving, setConfigSaving] = useState(false);
+  const [showConfigPreview, setShowConfigPreview] = useState(true);
   const [editingConfig, setEditingConfig] = useState<NotificationConfigResponse | null>(null);
   const [configForm, setConfigForm] = useState<NotificationConfigRequest>({
     key: '',
@@ -201,7 +232,7 @@ export function Notificaciones() {
     }
   }, [contextNotifications, activeTab]);
 
-  const handleOpenConfigDialog = (config?: NotificationConfigResponse) => {
+  const openConfigEditorFullScreen = (config?: NotificationConfigResponse) => {
     if (config) {
       setEditingConfig(config);
       setConfigForm({
@@ -211,6 +242,7 @@ export function Notificaciones() {
         deepLinkTemplate: config.deepLinkTemplate || '',
         metadataTemplate: config.metadataTemplate,
       });
+      setConfigEditorFullScreen(config.id);
     } else {
       setEditingConfig(null);
       setConfigForm({
@@ -220,14 +252,18 @@ export function Notificaciones() {
         deepLinkTemplate: '',
         metadataTemplate: null,
       });
+      setConfigEditorFullScreen('new');
     }
-    setIsConfigDialogOpen(true);
+  };
+
+  const closeConfigEditorFullScreen = () => {
+    setConfigEditorFullScreen(null);
+    setEditingConfig(null);
   };
 
   const handleSaveConfig = async () => {
     if (!apiService) return;
 
-    // Validación básica
     if (!configForm.key.trim()) {
       toast.error('La clave es obligatoria');
       return;
@@ -241,6 +277,7 @@ export function Notificaciones() {
       return;
     }
 
+    setConfigSaving(true);
     try {
       const request: NotificationConfigRequest = {
         key: configForm.key.trim(),
@@ -254,7 +291,7 @@ export function Notificaciones() {
         const response = await apiService.updateNotificationConfig(editingConfig.id, request);
         if (response.code === 200) {
           toast.success('Configuración actualizada correctamente');
-          setIsConfigDialogOpen(false);
+          closeConfigEditorFullScreen();
           await loadNotificationConfigs(currentPage, configSearch);
         } else {
           toast.error(response.message || 'Error al actualizar configuración');
@@ -263,7 +300,7 @@ export function Notificaciones() {
         const response = await apiService.createNotificationConfig(request);
         if (response.code === 200) {
           toast.success('Configuración creada correctamente');
-          setIsConfigDialogOpen(false);
+          closeConfigEditorFullScreen();
           await loadNotificationConfigs(currentPage, configSearch);
         } else {
           toast.error(response.message || 'Error al crear configuración');
@@ -271,6 +308,8 @@ export function Notificaciones() {
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Error al guardar configuración');
+    } finally {
+      setConfigSaving(false);
     }
   };
 
@@ -348,6 +387,164 @@ export function Notificaciones() {
       }
     };
   }, []);
+
+  // Vista pantalla completa: editor de configuración + preview mockup móvil
+  if (configEditorFullScreen !== null) {
+    const previewTitle = replacePlaceholdersForPreview(configForm.titleTemplate);
+    const previewMessage = configForm.messageTemplate || '<p class="text-[#6b6a6e] text-sm">Escribí el mensaje para ver la vista previa.</p>';
+
+    return (
+      <div className="fixed inset-0 z-50 flex flex-col bg-[#f8f9fa]">
+        <header className="flex-shrink-0 flex items-center justify-between gap-4 px-6 py-4 bg-white border-b border-[#4a494d]/10 shadow-sm">
+          <div className="flex items-center gap-3">
+            <Button variant="outline" size="sm" onClick={closeConfigEditorFullScreen} className="gap-2">
+              <ArrowLeft className="h-4 w-4" />
+              Volver
+            </Button>
+            <span className="text-lg font-semibold text-[#3b3a3e]">
+              {editingConfig ? `Editar: ${editingConfig.key}` : 'Nueva configuración'}
+            </span>
+          </div>
+          <Button onClick={handleSaveConfig} disabled={configSaving} className="bg-[#55c3c5] hover:bg-[#4ab3b5] gap-2">
+            <Save className="h-4 w-4" />
+            {configSaving ? 'Guardando...' : editingConfig ? 'Actualizar' : 'Crear'}
+          </Button>
+        </header>
+
+        <ResizablePanelGroup direction="horizontal" className="flex-1 min-h-0">
+          <ResizablePanel defaultSize={55} minSize={35} className="flex flex-col min-h-0 min-w-0 border-r border-[#4a494d]/10 bg-white">
+            <ScrollArea className="flex-1 min-h-0">
+              <div className="max-w-2xl space-y-5 p-6">
+                <div className="space-y-2">
+                  <Label className="text-[#3b3a3e]">Clave *</Label>
+                  <Input
+                    value={configForm.key}
+                    onChange={(e) => setConfigForm((f) => ({ ...f, key: e.target.value }))}
+                    placeholder="ej: task_assigned"
+                    disabled={!!editingConfig}
+                    className={editingConfig ? 'bg-[#f1f1f2] text-[#6b6a6e]' : ''}
+                  />
+                  {editingConfig && <p className="text-xs text-[#6b6a6e]">La clave no se puede modificar</p>}
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-[#3b3a3e]">Template del Título *</Label>
+                  <Input
+                    value={configForm.titleTemplate}
+                    onChange={(e) => setConfigForm((f) => ({ ...f, titleTemplate: e.target.value }))}
+                    placeholder="ej: Nueva tarea: {{taskName}}"
+                  />
+                  <p className="text-xs text-[#6b6a6e]">{PLACEHOLDERS_HELP}</p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-[#3b3a3e]">Template del Mensaje *</Label>
+                  <EmailEditor
+                    key={configEditorFullScreen === 'new' ? 'new' : configEditorFullScreen}
+                    value={configForm.messageTemplate}
+                    onChange={(html) => setConfigForm((f) => ({ ...f, messageTemplate: html }))}
+                    placeholder="Mensaje de la notificación. Usa {{placeholders}}."
+                    minHeight="220px"
+                  />
+                  <p className="text-xs text-[#6b6a6e]">{PLACEHOLDERS_HELP}</p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-[#3b3a3e]">Template del Deep Link (opcional)</Label>
+                  <Input
+                    value={configForm.deepLinkTemplate || ''}
+                    onChange={(e) => setConfigForm((f) => ({ ...f, deepLinkTemplate: e.target.value }))}
+                    placeholder="ej: lendar://task/{{taskId}}"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-[#3b3a3e]">Metadata Template (opcional, JSON)</Label>
+                  <Textarea
+                    value={configForm.metadataTemplate ? JSON.stringify(configForm.metadataTemplate, null, 2) : ''}
+                    onChange={(e) => {
+                      try {
+                        const parsed = e.target.value.trim() ? JSON.parse(e.target.value) : null;
+                        setConfigForm((f) => ({ ...f, metadataTemplate: parsed }));
+                      } catch {
+                        // mantener valor si no es JSON válido
+                      }
+                    }}
+                    placeholder='{"key": "value"}'
+                    rows={3}
+                  />
+                </div>
+
+                <Accordion type="single" collapsible className="rounded-xl border border-[#4a494d]/10 bg-[#f8f9fa] overflow-hidden">
+                  <AccordionItem value="leyenda" className="border-none">
+                    <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-white/50 [&[data-state=open]]:border-b [&[data-state=open]]:border-[#4a494d]/10">
+                      <span className="text-sm font-semibold text-[#3b3a3e] flex items-center gap-2">
+                        <BookOpen className="h-4 w-4 text-[#55c3c5]" />
+                        Leyenda de variables
+                      </span>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <div className="px-4 pb-4 space-y-5">
+                        <p className="text-xs text-[#6b6a6e]">Usá doble llave, ej. {`{{taskName}}`}</p>
+                        {NOTIFICATION_PLACEHOLDERS_LEGEND.map(({ category, items }) => (
+                          <div key={category}>
+                            <p className="text-xs font-semibold text-[#55c3c5] uppercase tracking-wide mb-2">{category}</p>
+                            <ul className="space-y-2">
+                              {items.map(({ key, desc }) => (
+                                <li key={key} className="flex items-start gap-3 text-sm">
+                                  <code className="rounded-md bg-[#e8eaeb] px-2 py-1 font-mono text-xs shrink-0 border border-[#4a494d]/10">{`{{${key}}}`}</code>
+                                  <span className="text-[#6b6a6e] pt-0.5">{desc}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ))}
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
+              </div>
+            </ScrollArea>
+          </ResizablePanel>
+          <ResizableHandle withHandle className="bg-[#4a494d]/10 hover:bg-[#55c3c5]/30 transition-colors" />
+          <ResizablePanel defaultSize={45} minSize={25} className="flex flex-col min-w-0 bg-[#eef0f1]">
+            <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-[#4a494d]/10 bg-white/80">
+              <span className="text-sm font-medium text-[#6b6a6e] flex items-center gap-2">
+                <Eye className="h-4 w-4" />
+                Vista previa (notificación móvil)
+              </span>
+              <Button variant="ghost" size="sm" onClick={() => setShowConfigPreview((v) => !v)}>
+                {showConfigPreview ? 'Ocultar' : 'Mostrar'}
+              </Button>
+            </div>
+            {showConfigPreview && (
+              <ScrollArea className="flex-1 p-6">
+                <div className="flex justify-center">
+                  <div className="w-[320px] rounded-[2.5rem] border-[10px] border-[#1f2a2a] bg-[#1f2a2a] shadow-2xl overflow-hidden" style={{ boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
+                    <div className="h-[44px] bg-[#1f2a2a] flex items-center justify-center">
+                      <div className="w-24 h-1.5 rounded-full bg-[#4a494d]" />
+                    </div>
+                    <div className="bg-[#f8f9fa] min-h-[500px] p-4">
+                      <div className="rounded-xl bg-white border border-[#4a494d]/10 shadow-sm overflow-hidden">
+                        <div className="p-3 border-b border-[#4a494d]/10 flex items-center gap-2">
+                          <Bell className="h-5 w-5 text-[#55c3c5] shrink-0" />
+                          <div className="min-w-0 flex-1">
+                            <p className="font-semibold text-[#1f2a2a] text-sm truncate">{previewTitle || 'Título'}</p>
+                            <p className="text-xs text-[#6b6a6e]">Ahora</p>
+                          </div>
+                        </div>
+                        <div className="p-3 text-sm text-[#3b3a3e] prose prose-sm max-w-none [&_a]:text-[#55c3c5] [&_a.email-cta-button]:bg-[#55c3c5] [&_a.email-cta-button]:text-white [&_a.email-cta-button]:px-3 [&_a.email-cta-button]:py-1.5 [&_a.email-cta-button]:rounded [&_a.email-cta-button]:no-underline" dangerouslySetInnerHTML={{ __html: previewMessage }} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </ScrollArea>
+            )}
+          </ResizablePanel>
+        </ResizablePanelGroup>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 p-8">
@@ -475,7 +672,7 @@ export function Notificaciones() {
                     {totalElements} configuración{totalElements !== 1 ? 'es' : ''} encontrada{totalElements !== 1 ? 's' : ''}
                   </CardDescription>
                 </div>
-                <Button onClick={() => handleOpenConfigDialog()} className="gap-2">
+                <Button onClick={() => openConfigEditorFullScreen()} className="gap-2">
                   <Plus className="h-4 w-4" />
                   Nueva Configuración
                 </Button>
@@ -570,7 +767,7 @@ export function Notificaciones() {
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  onClick={() => handleOpenConfigDialog(config)}
+                                  onClick={() => openConfigEditorFullScreen(config)}
                                   className="gap-2"
                                 >
                                   <Edit2 className="h-4 w-4" />
@@ -780,107 +977,6 @@ export function Notificaciones() {
         </TabsContent>
       </Tabs>
 
-      {/* Dialog para crear/editar configuración */}
-      <Dialog open={isConfigDialogOpen} onOpenChange={setIsConfigDialogOpen}>
-        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>
-              {editingConfig ? 'Editar Configuración' : 'Nueva Configuración'}
-            </DialogTitle>
-            <DialogDescription>
-              {editingConfig 
-                ? 'Modifica los campos de la configuración de notificación'
-                : 'Crea una nueva configuración de notificación'}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="key">Clave *</Label>
-              <Input
-                id="key"
-                value={configForm.key}
-                onChange={(e) => setConfigForm({ ...configForm, key: e.target.value })}
-                placeholder="ej: task_assigned"
-                disabled={!!editingConfig}
-                className={editingConfig ? 'bg-gray-100' : ''}
-              />
-              {editingConfig && (
-                <p className="text-xs text-[#6b6a6e]">La clave no se puede modificar</p>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="titleTemplate">Template del Título *</Label>
-              <Input
-                id="titleTemplate"
-                value={configForm.titleTemplate}
-                onChange={(e) => setConfigForm({ ...configForm, titleTemplate: e.target.value })}
-                placeholder="ej: Nueva tarea asignada: {{taskName}}"
-                maxLength={500}
-              />
-              <p className="text-xs text-[#6b6a6e]">
-                {configForm.titleTemplate.length}/500 caracteres
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="messageTemplate">Template del Mensaje *</Label>
-              <Textarea
-                id="messageTemplate"
-                value={configForm.messageTemplate}
-                onChange={(e) => setConfigForm({ ...configForm, messageTemplate: e.target.value })}
-                placeholder="ej: Se te ha asignado la tarea {{taskName}} con fecha límite {{dueDate}}"
-                rows={4}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="deepLinkTemplate">Template del Deep Link (opcional)</Label>
-              <Input
-                id="deepLinkTemplate"
-                value={configForm.deepLinkTemplate || ''}
-                onChange={(e) => setConfigForm({ ...configForm, deepLinkTemplate: e.target.value })}
-                placeholder="ej: lendar://task/{{taskId}}"
-                maxLength={500}
-              />
-              <p className="text-xs text-[#6b6a6e]">
-                {configForm.deepLinkTemplate?.length || 0}/500 caracteres
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="metadataTemplate">Metadata Template (opcional, JSON)</Label>
-              <Textarea
-                id="metadataTemplate"
-                value={configForm.metadataTemplate ? JSON.stringify(configForm.metadataTemplate, null, 2) : ''}
-                onChange={(e) => {
-                  try {
-                    const parsed = e.target.value.trim() ? JSON.parse(e.target.value) : null;
-                    setConfigForm({ ...configForm, metadataTemplate: parsed });
-                  } catch {
-                    // Mantener el valor como string si no es JSON válido
-                  }
-                }}
-                placeholder='{"key": "value"}'
-                rows={4}
-              />
-              <p className="text-xs text-[#6b6a6e]">
-                Ingresa un objeto JSON válido o déjalo vacío
-              </p>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsConfigDialogOpen(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleSaveConfig} className="bg-[#55c3c5] hover:bg-[#4ab3b5]">
-              {editingConfig ? 'Actualizar' : 'Crear'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

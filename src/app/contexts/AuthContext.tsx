@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback } from 'react';
 import { createApiService, AuthResponse } from '../services/api';
 import { initializeFirebase, initializeMessaging, getFCMToken, getPlatform } from '../services/firebase';
+import { registerSessionInvalidHandler, unregisterSessionInvalidHandler } from '../utils/sessionInvalidHandler';
 import { toast } from 'sonner';
 
 // Importar useErrorSafe de forma segura
@@ -91,6 +92,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initializeFirebase();
     initializeMessaging();
   }, []);
+
+  const clearSession = useCallback(() => {
+    setUser(null);
+    setEnvironment('development');
+    setApiUrl(API_URLS.development);
+    setApiService(null);
+    localStorage.removeItem(STORAGE_KEYS.USER);
+    localStorage.removeItem(STORAGE_KEYS.ENVIRONMENT);
+    localStorage.removeItem(STORAGE_KEYS.API_URL);
+    document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    document.cookie = 'refresh_token=; path=/backoffice/api/auth; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+  }, []);
+
+  useEffect(() => {
+    registerSessionInvalidHandler(clearSession);
+    return () => unregisterSessionInvalidHandler();
+  }, [clearSession]);
 
   // Persistir cambios en localStorage
   useEffect(() => {
@@ -324,18 +342,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('⚠️ [LOGOUT] Error en proceso de logout:', error);
     } finally {
-      // Limpiar estado local siempre, incluso si falla el logout en el backend
-      setUser(null);
-      setEnvironment('development');
-      setApiUrl(API_URLS.development);
-      setApiService(null);
-      // Limpiar localStorage
-      localStorage.removeItem(STORAGE_KEYS.USER);
-      localStorage.removeItem(STORAGE_KEYS.ENVIRONMENT);
-      localStorage.removeItem(STORAGE_KEYS.API_URL);
-      // Limpiar cookies
-      document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-      document.cookie = 'refresh_token=; path=/backoffice/api/auth; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+      clearSession();
       console.log('✅ [LOGOUT] Estado local limpiado');
     }
   };
