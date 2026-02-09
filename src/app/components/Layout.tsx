@@ -12,6 +12,9 @@ import {
   User,
   Bell,
   Mail,
+  Building2,
+  MapPin,
+  Store,
 } from 'lucide-react';
 import logoImage from '../../assets/65d1f35782e19a4a8c4d56fc288c48d07bab3eaa.png';
 
@@ -29,6 +32,9 @@ export function Layout({ children, currentModule, onModuleChange }: LayoutProps)
     { id: 'ingresos', name: 'Ingresos', icon: TrendingUp },
     { id: 'tareas', name: 'Tareas', icon: ListTodo },
     { id: 'prestamos', name: 'Variables', icon: Settings },
+    { id: 'escribanias', name: 'Escribanías', icon: Building2 },
+    { id: 'regiones', name: 'Regiones', icon: MapPin },
+    { id: 'franquicias', name: 'Franquicias', icon: Store },
     { id: 'notificaciones', name: 'Notificaciones', icon: Bell },
     { id: 'emails', name: 'Emails', icon: Mail },
     { id: 'usuarios', name: 'Usuarios', icon: User },

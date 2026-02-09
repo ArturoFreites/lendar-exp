@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
-import { 
+import { useUsers } from '../../hooks/use-users';
+import {
   UserResponse,
   RoleResponse,
   PermissionResponse,
@@ -9,7 +9,7 @@ import {
   RoleRequest,
   UserRoleUpdaterRequest,
   PermissionRequest,
-  UserSessionResponse
+  UserSessionResponse,
 } from '../../services/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
@@ -62,7 +62,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale/es';
 
 export function Usuarios() {
-  const { apiService } = useAuth();
+  const usersApi = useUsers();
   const [activeTab, setActiveTab] = useState('sesiones');
   
   // Sesiones state
@@ -113,7 +113,7 @@ export function Usuarios() {
   const [selectedRoleId, setSelectedRoleId] = useState<number | null>(null);
 
   const loadSessions = async () => {
-    if (!apiService) {
+    if (!usersApi.hasApi) {
       toast.error('No hay servicio de API disponible');
       return;
     }
@@ -121,7 +121,7 @@ export function Usuarios() {
     setSessionsLoading(true);
     try {
       const email = sessionUserEmail.trim() || undefined;
-      const response = await apiService.getUserSessions(email);
+      const response = await usersApi.getUserSessions(email);
       
       if (response.code === 200 && response.data) {
         setSessions(response.data);
@@ -143,7 +143,7 @@ export function Usuarios() {
   };
 
   const handleRevokeAllSessions = async () => {
-    if (!apiService) {
+    if (!usersApi.hasApi) {
       toast.error('No hay servicio de API disponible');
       return;
     }
@@ -154,7 +154,7 @@ export function Usuarios() {
 
     setRevokingAll(true);
     try {
-      const response = await apiService.revokeAllSessions();
+      const response = await usersApi.revokeAllSessions();
       
       if (response.code === 200) {
         toast.success('Todas las sesiones han sido cerradas correctamente');
@@ -174,7 +174,7 @@ export function Usuarios() {
   };
 
   const loadUsers = async (page: number = 0, search?: string) => {
-    if (!apiService) {
+    if (!usersApi.hasApi) {
       toast.error('No hay servicio de API disponible');
       setUsers([]);
       return;
@@ -193,7 +193,7 @@ export function Usuarios() {
         params.contains = `email:${search.trim()}`;
       }
 
-      const response = await apiService.getUsers(params);
+      const response = await usersApi.getUsers(params);
       if (response.code === 200 && response.data) {
         const usersList = response.data.content || [];
         setUsers(usersList);
@@ -217,7 +217,7 @@ export function Usuarios() {
   };
 
   const loadRoles = async (page: number = 0) => {
-    if (!apiService) {
+    if (!usersApi.hasApi) {
       setRoles([]);
       return;
     }
@@ -229,7 +229,7 @@ export function Usuarios() {
         size: '10',
       };
 
-      const response = await apiService.getRoles(params);
+      const response = await usersApi.getRoles(params);
       if (response.code === 200 && response.data) {
         const rolesList = response.data.content || [];
         setRoles(rolesList);
@@ -249,7 +249,7 @@ export function Usuarios() {
   };
 
   const loadPermissions = async (page: number = 0) => {
-    if (!apiService) {
+    if (!usersApi.hasApi) {
       setPermissions([]);
       return;
     }
@@ -261,7 +261,7 @@ export function Usuarios() {
         size: '100', // Cargar más permisos ya que suelen ser pocos
       };
 
-      const response = await apiService.getPermissions(params);
+      const response = await usersApi.getPermissions(params);
       if (response.code === 200 && response.data) {
         const permissionsList = response.data.content || [];
         setPermissions(permissionsList);
@@ -281,9 +281,9 @@ export function Usuarios() {
   };
 
   const loadRole = async (roleId: number) => {
-    if (!apiService) return null;
+    if (!usersApi.hasApi) return null;
     try {
-      const response = await apiService.getRoleById(roleId);
+      const response = await usersApi.getRoleById(roleId);
       if (response.code === 200 && response.data) {
         return response.data;
       }
@@ -301,9 +301,9 @@ export function Usuarios() {
   const handleOpenRoleDialog = async (role?: RoleResponse) => {
     // Cargar permisos disponibles si no están cargados
     if (availablePermissions.length === 0) {
-      if (!apiService) return;
+      if (!usersApi.hasApi) return;
       try {
-        const response = await apiService.getPermissions({ page: '0', size: '100' });
+        const response = await usersApi.getPermissions({ page: '0', size: '100' });
         if (response.code === 200 && response.data) {
           setAvailablePermissions(response.data.content || []);
         }
@@ -331,7 +331,7 @@ export function Usuarios() {
   };
 
   const handleSaveRole = async () => {
-    if (!apiService) return;
+    if (!usersApi.hasApi) return;
 
     if (!roleForm.name.trim()) {
       toast.error('El nombre del rol es obligatorio');
@@ -340,7 +340,7 @@ export function Usuarios() {
 
     try {
       if (editingRole) {
-        const response = await apiService.updateRole(editingRole.id, roleForm);
+        const response = await usersApi.updateRole(editingRole.id, roleForm);
         if (response.code === 200) {
           toast.success('Rol actualizado correctamente');
           setIsRoleDialogOpen(false);
@@ -349,7 +349,7 @@ export function Usuarios() {
           toast.error(response.message || 'Error al actualizar rol');
         }
       } else {
-        const response = await apiService.createRole(roleForm);
+        const response = await usersApi.createRole(roleForm);
         if (response.code === 200) {
           toast.success('Rol creado correctamente');
           setIsRoleDialogOpen(false);
@@ -364,14 +364,14 @@ export function Usuarios() {
   };
 
   const handleDeleteRole = async (roleId: number) => {
-    if (!apiService) return;
+    if (!usersApi.hasApi) return;
     
     if (!confirm('¿Estás seguro de que deseas eliminar este rol?')) {
       return;
     }
 
     try {
-      const response = await apiService.deleteRole(roleId);
+      const response = await usersApi.deleteRole(roleId);
       if (response.code === 200) {
         toast.success('Rol eliminado correctamente');
         await loadRoles(rolesCurrentPage);
@@ -395,7 +395,7 @@ export function Usuarios() {
   };
 
   const handleSaveUserRole = async () => {
-    if (!apiService || !selectedUser) return;
+    if (!usersApi.hasApi || !selectedUser) return;
 
     if (!selectedRoleId) {
       toast.error('Debes seleccionar un rol');
@@ -414,7 +414,7 @@ export function Usuarios() {
         type: selectedRole.name,
       };
 
-      const response = await apiService.updateUserRole(request);
+      const response = await usersApi.updateUserRole(request);
       if (response.code === 200) {
         toast.success('Rol asignado correctamente');
         setIsUserRoleDialogOpen(false);
@@ -445,7 +445,7 @@ export function Usuarios() {
   };
 
   const handleSavePermission = async () => {
-    if (!apiService) return;
+    if (!usersApi.hasApi) return;
 
     if (!permissionForm.name.trim()) {
       toast.error('El nombre del permiso es obligatorio');
@@ -454,7 +454,7 @@ export function Usuarios() {
 
     try {
       if (editingPermission) {
-        const response = await apiService.updatePermission(editingPermission.id, permissionForm);
+        const response = await usersApi.updatePermission(editingPermission.id, permissionForm);
         if (response.code === 200) {
           toast.success('Permiso actualizado correctamente');
           setIsPermissionDialogOpen(false);
@@ -463,7 +463,7 @@ export function Usuarios() {
           toast.error(response.message || 'Error al actualizar permiso');
         }
       } else {
-        const response = await apiService.createPermission(permissionForm);
+        const response = await usersApi.createPermission(permissionForm);
         if (response.code === 200) {
           toast.success('Permiso creado correctamente');
           setIsPermissionDialogOpen(false);
@@ -478,14 +478,14 @@ export function Usuarios() {
   };
 
   const handleDeletePermission = async (permissionId: number) => {
-    if (!apiService) return;
+    if (!usersApi.hasApi) return;
     
     if (!confirm('¿Estás seguro de que deseas eliminar este permiso?')) {
       return;
     }
 
     try {
-      const response = await apiService.deletePermission(permissionId);
+      const response = await usersApi.deletePermission(permissionId);
       if (response.code === 200) {
         toast.success('Permiso eliminado correctamente');
         await loadPermissions(permissionsCurrentPage);
@@ -654,7 +654,7 @@ export function Usuarios() {
   };
 
   useEffect(() => {
-    if (!apiService) return;
+    if (!usersApi.hasApi) return;
     
     if (activeTab === 'usuarios') {
       // Solo cargar si no hay búsqueda activa, para evitar sobreescribir resultados
@@ -667,7 +667,7 @@ export function Usuarios() {
       loadPermissions(0);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, apiService]);
+  }, [activeTab, usersApi.hasApi]);
 
   return (
     <div className="space-y-6 p-8">

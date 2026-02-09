@@ -977,30 +977,31 @@ export function TareaDetalle({ tareaId, onBack }: TareaDetalleProps) {
                     </div>
                   </div>
 
-                  {/* Línea vertical de conexión estilo Git */}
-                  <div className="absolute left-[23px] top-[92px] bottom-[52px] w-[2px] bg-[#e8eaed]"></div>
-                  
-                  <div className="space-y-0">
-                    {tarea.actions.map((action, index) => (
-                      <div key={index} className="relative flex items-start gap-4 py-2">
-                        {/* Nodo de commit estilo Git con número */}
-                        <div className="relative z-10 flex-shrink-0 pt-1">
-                          <div className="w-[46px] h-[46px] rounded-full border-2 border-[#55c3c5] bg-white flex items-center justify-center shadow-sm">
-                            <span className="text-[#55c3c5] font-bold text-base">{index + 1}</span>
+                  {/* Árbol estilo git: columna de nodos fija + contenido sin solapamiento */}
+                  <div className="flex min-w-0 rounded-xl border border-[#e8eaed] bg-[#fafbfc]/50 overflow-hidden">
+                    {/* Columna del tronco y nodos (reserva espacio, z-index bajo para la línea) */}
+                    <div className="relative flex-shrink-0 flex flex-col items-center py-2" style={{ width: 56 }}>
+                      <div className="absolute top-0 bottom-0 left-1/2 -translate-x-px w-px bg-[#e8eaed] z-0" aria-hidden />
+                      {tarea.actions.map((action, index) => (
+                        <div key={index} className="relative z-10 flex flex-col items-center">
+                          <div className="w-10 h-10 rounded-full border-2 border-[#55c3c5] bg-white flex items-center justify-center shadow-sm">
+                            <span className="text-[#55c3c5] font-bold text-sm">{index + 1}</span>
                           </div>
-                          
-                          {/* Línea de conexión al siguiente nodo */}
                           {index < tarea.actions.length - 1 && (
-                            <div className="absolute top-[46px] left-[22px] w-[2px] h-[calc(100%+8px)] bg-[#e8eaed]"></div>
+                            <div className="w-0.5 h-3 bg-[#e8eaed] shrink-0" aria-hidden />
                           )}
                         </div>
-
-                        {/* Card de contenido mejorado */}
-                        <div className="flex-1 group">
+                      ))}
+                      <div className="w-10 h-10 rounded-full border-2 border-emerald-600 bg-white flex items-center justify-center shadow-sm z-10">
+                        <Check className="h-5 w-5 text-emerald-600" />
+                      </div>
+                    </div>
+                    {/* Columna de cards: siempre a la derecha del árbol */}
+                    <div className="flex-1 min-w-0 flex flex-col pl-4 pr-2 py-2">
+                      {tarea.actions.map((action, index) => (
+                        <div key={index} className="group py-2 first:pt-0">
                           <div className="relative flex items-start gap-3 p-4 bg-gradient-to-r from-white to-[#fafbfc] rounded-lg border border-[#e8eaed] hover:border-[#55c3c5]/50 hover:shadow-md transition-all overflow-hidden">
-                            {/* Barra lateral de color */}
-                            <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-[#55c3c5] to-[#3db3b5]"></div>
-                            
+                            <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-[#55c3c5] to-[#3db3b5] rounded-l" />
                             <div className="flex-1 min-w-0 pl-3">
                               <div className="mb-2">
                                 <h4 className="font-semibold text-[#3b3a3e]">{action.name}</h4>
@@ -1055,17 +1056,9 @@ export function TareaDetalle({ tareaId, onBack }: TareaDetalleProps) {
                             </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
-
-                    {/* Nodo final */}
-                    <div className="flex items-start gap-4 pt-2">
-                      <div className="relative z-10 flex-shrink-0">
-                        <div className="w-[46px] h-[46px] rounded-full border-2 border-emerald-600 bg-white flex items-center justify-center shadow-sm">
-                          <Check className="h-5 w-5 text-emerald-600" />
-                        </div>
-                      </div>
-                      <div className="flex-1 pt-2">
+                      ))}
+                      {/* Fila alineada con el nodo final (check) */}
+                      <div className="pt-2 pb-1">
                         <p className="text-sm font-semibold text-[#3b3a3e]">Flujo Completado</p>
                         <p className="text-xs text-[#6b6a6e] mt-0.5">Todas las acciones se ejecutan en secuencia</p>
                       </div>

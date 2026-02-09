@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { useAuth } from './AuthContext';
+import { useNotificationUseCases } from '../hooks/use-notifications';
 import { NotificationResponse } from '../services/api';
 import { onMessageListener } from '../services/firebase';
 import { toast } from 'sonner';
@@ -17,35 +18,30 @@ interface NotificationContextType {
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
-  const { apiService, isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user } = useAuth();
+  const { getNotifications, markNotificationAsRead, hasApi } = useNotificationUseCases();
   const [notifications, setNotifications] = useState<NotificationResponse[]>([]);
   const [loading, setLoading] = useState(false);
-  
-  // Refs para evitar memory leaks - Solo FCM y Service Worker
+
   const fcmUnsubscribeRef = useRef<(() => void) | null>(null);
   const serviceWorkerMessageHandlerRef = useRef<((event: MessageEvent) => void) | null>(null);
 
-  // Cargar notificaciones solo al inicio (sin polling)
   const loadNotifications = useCallback(async () => {
-    if (!apiService || !isAuthenticated) {
+    if (!hasApi || !isAuthenticated) {
       setNotifications([]);
       return;
     }
 
     setLoading(true);
     try {
-      const response = await apiService.getNotifications({ page: '0', size: '20' });
-      if (response.code === 200 && response.data) {
+      const response = await getNotifications({ page: '0', size: '20' });
+      if (response?.code === 200 && response.data) {
         const loadedNotifications = response.data.content || [];
-        // Evitar duplicados usando ID real del servidor
         setNotifications(prev => {
           const existingIds = new Set(prev.map(n => n.id));
           const newNotifications = loadedNotifications.filter(n => !existingIds.has(n.id));
-          // Combinar y ordenar por fecha (más recientes primero)
           const combined = [...newNotifications, ...prev];
-          const unique = Array.from(
-            new Map(combined.map(n => [n.id, n])).values()
-          );
+          const unique = Array.from(new Map(combined.map(n => [n.id, n])).values());
           return unique
             .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
             .slice(0, 20);
@@ -56,14 +52,14 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [apiService, isAuthenticated]);
+  }, [getNotifications, hasApi, isAuthenticated]);
 
   const markAsRead = useCallback(async (id: number) => {
-    if (!apiService) return;
+    if (!hasApi) return;
 
     try {
-      const response = await apiService.markNotificationAsRead(id);
-      if (response.code === 200) {
+      const response = await markNotificationAsRead(id);
+      if (response?.code === 200) {
         setNotifications(prev =>
           prev.map(n => n.id === id ? { ...n, readAt: new Date().toISOString(), status: 'READ' } : n)
         );
@@ -72,7 +68,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       console.error('Error al marcar como leída:', error);
       throw error;
     }
-  }, [apiService]);
+  }, [markNotificationAsRead, hasApi]);
 
   const markAllAsRead = useCallback(async () => {
     if (!apiService) return;
@@ -85,7 +81,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('Error al marcar todas como leídas:', error);
     }
-  }, [apiService, notifications, markAsRead]);
+  }, [notifications, markAsRead]);
 
   // Función para procesar notificaciones recibidas
   const handleNotificationReceived = useCallback((notification: NotificationResponse) => {

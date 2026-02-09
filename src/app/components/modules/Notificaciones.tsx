@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
 import { useNotifications } from '../../contexts/NotificationContext';
-import { 
-  NotificationResponse, 
+import { useNotificationUseCases } from '../../hooks/use-notifications';
+import { useUsers } from '../../hooks/use-users';
+import { useAuth } from '../../contexts/AuthContext';
+import { useProdPromotion } from '../../contexts/ProdPromotionContext';
+import {
+  NotificationResponse,
   NotificationConfigResponse,
   NotificationConfigRequest,
-  PaginationResponse,
-  UserProfileResponse
+  UserProfileResponse,
 } from '../../services/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
@@ -38,6 +40,7 @@ import {
   Save,
   Eye,
   BookOpen,
+  Upload,
 } from 'lucide-react';
 import { EmailEditor } from './EmailEditor';
 import { toast } from 'sonner';
@@ -75,8 +78,11 @@ function replacePlaceholdersForPreview(text: string): string {
 }
 
 export function Notificaciones() {
-  const { apiService } = useAuth();
   const { notifications: contextNotifications, refreshNotifications: refreshContextNotifications } = useNotifications();
+  const notificationApi = useNotificationUseCases();
+  const usersApi = useUsers();
+  const { environment } = useAuth();
+  const { openPromoteFlow } = useProdPromotion();
   const [notifications, setNotifications] = useState<NotificationResponse[]>([]);
   const [notificationConfigs, setNotificationConfigs] = useState<NotificationConfigResponse[]>([]);
   const [loading, setLoading] = useState(false);
@@ -110,7 +116,7 @@ export function Notificaciones() {
   const [userSearchLoading, setUserSearchLoading] = useState(false);
 
   const loadNotifications = async () => {
-    if (!apiService) {
+    if (!notificationApi.hasApi) {
       toast.error('No hay servicio de API disponible');
       setNotifications([]);
       return;
@@ -118,11 +124,11 @@ export function Notificaciones() {
 
     setLoading(true);
     try {
-      const response = await apiService.getNotifications({ page: '0', size: '50' });
-      if (response.code === 200 && response.data) {
+      const response = await notificationApi.getNotifications({ page: '0', size: '50' });
+      if (response?.code === 200 && response.data) {
         setNotifications(response.data.content || []);
       } else {
-        toast.error(response.message || 'Error al cargar notificaciones');
+        toast.error(response?.message || 'Error al cargar notificaciones');
         setNotifications([]);
       }
     } catch (error) {
@@ -135,7 +141,7 @@ export function Notificaciones() {
   };
 
   const loadNotificationConfigs = async (page: number = 0, search?: string) => {
-    if (!apiService) {
+    if (!notificationApi.hasApi) {
       toast.error('No hay servicio de API disponible');
       setNotificationConfigs([]);
       return;
@@ -147,19 +153,18 @@ export function Notificaciones() {
         page: page.toString(),
         size: '10',
       };
-      // Backend BaseRepository espera operador "contains" con "field:value" para LIKE %value%
       if (search && search.trim()) {
         params.contains = `key:${search.trim()}`;
       }
 
-      const response = await apiService.getNotificationConfigs(params);
-      if (response.code === 200 && response.data) {
+      const response = await notificationApi.getNotificationConfigs(params);
+      if (response?.code === 200 && response.data) {
         setNotificationConfigs(response.data.content || []);
         setTotalPages(response.data.totalPages || 0);
         setTotalElements(response.data.totalElements || 0);
         setCurrentPage(response.data.number || 0);
       } else {
-        toast.error(response.message || 'Error al cargar configuraciones');
+        toast.error(response?.message || 'Error al cargar configuraciones');
         setNotificationConfigs([]);
       }
     } catch (error) {
@@ -172,11 +177,11 @@ export function Notificaciones() {
   };
 
   const markAsRead = async (id: number) => {
-    if (!apiService) return;
+    if (!notificationApi.hasApi) return;
 
     try {
-      const response = await apiService.markNotificationAsRead(id);
-      if (response.code === 200) {
+      const response = await notificationApi.markNotificationAsRead(id);
+      if (response?.code === 200) {
         setNotifications(prev =>
           prev.map(n => n.id === id ? { ...n, readAt: new Date().toISOString(), status: 'READ' } : n)
         );
@@ -288,22 +293,22 @@ export function Notificaciones() {
       };
 
       if (editingConfig) {
-        const response = await apiService.updateNotificationConfig(editingConfig.id, request);
-        if (response.code === 200) {
+        const response = await notificationApi.updateNotificationConfig(editingConfig.id, request);
+        if (response?.code === 200) {
           toast.success('Configuración actualizada correctamente');
           closeConfigEditorFullScreen();
           await loadNotificationConfigs(currentPage, configSearch);
         } else {
-          toast.error(response.message || 'Error al actualizar configuración');
+          toast.error(response?.message || 'Error al actualizar configuración');
         }
       } else {
-        const response = await apiService.createNotificationConfig(request);
-        if (response.code === 200) {
+        const response = await notificationApi.createNotificationConfig(request);
+        if (response?.code === 200) {
           toast.success('Configuración creada correctamente');
           closeConfigEditorFullScreen();
           await loadNotificationConfigs(currentPage, configSearch);
         } else {
-          toast.error(response.message || 'Error al crear configuración');
+          toast.error(response?.message || 'Error al crear configuración');
         }
       }
     } catch (error) {
@@ -314,15 +319,15 @@ export function Notificaciones() {
   };
 
   const handleToggleActive = async (config: NotificationConfigResponse) => {
-    if (!apiService) return;
+    if (!notificationApi.hasApi) return;
 
     try {
-      const response = await apiService.updateNotificationConfigActive(config.id, !config.active);
-      if (response.code === 200) {
+      const response = await notificationApi.updateNotificationConfigActive(config.id, !config.active);
+      if (response?.code === 200) {
         toast.success(`Configuración ${!config.active ? 'activada' : 'desactivada'} correctamente`);
         await loadNotificationConfigs(currentPage, configSearch);
       } else {
-        toast.error(response.message || 'Error al actualizar estado');
+        toast.error(response?.message || 'Error al actualizar estado');
       }
     } catch (error) {
       toast.error('Error al actualizar estado');
@@ -330,7 +335,7 @@ export function Notificaciones() {
   };
 
   const handleUserSearch = async () => {
-    if (!apiService) {
+    if (!usersApi.hasApi) {
       toast.error('No hay servicio de API disponible');
       return;
     }
@@ -344,12 +349,12 @@ export function Notificaciones() {
     setUserSearchLoading(true);
     setUserProfile(null);
     try {
-      const response = await apiService.getUserProfile(userId);
-      if (response.code === 200 && response.data) {
+      const response = await usersApi.getUserProfile(userId);
+      if (response?.code === 200 && response.data) {
         setUserProfile(response.data);
         toast.success('Usuario encontrado');
       } else {
-        toast.error(response.message || 'Usuario no encontrado');
+        toast.error(response?.message || 'Usuario no encontrado');
         setUserProfile(null);
       }
     } catch (error) {
@@ -362,7 +367,7 @@ export function Notificaciones() {
   };
 
   useEffect(() => {
-    if (!apiService) {
+    if (!notificationApi.hasApi) {
       return;
     }
     if (activeTab === 'notificaciones') {
@@ -371,7 +376,7 @@ export function Notificaciones() {
       loadNotificationConfigs(0, configSearch);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, apiService]);
+  }, [activeTab, notificationApi.hasApi]);
 
   // Sincronizar notificaciones del contexto cuando cambian
   useEffect(() => {
@@ -518,27 +523,25 @@ export function Notificaciones() {
               </Button>
             </div>
             {showConfigPreview && (
-              <ScrollArea className="flex-1 p-6">
-                <div className="flex justify-center">
-                  <div className="w-[320px] rounded-[2.5rem] border-[10px] border-[#1f2a2a] bg-[#1f2a2a] shadow-2xl overflow-hidden" style={{ boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
-                    <div className="h-[44px] bg-[#1f2a2a] flex items-center justify-center">
-                      <div className="w-24 h-1.5 rounded-full bg-[#4a494d]" />
-                    </div>
-                    <div className="bg-[#f8f9fa] min-h-[500px] p-4">
-                      <div className="rounded-xl bg-white border border-[#4a494d]/10 shadow-sm overflow-hidden">
-                        <div className="p-3 border-b border-[#4a494d]/10 flex items-center gap-2">
-                          <Bell className="h-5 w-5 text-[#55c3c5] shrink-0" />
-                          <div className="min-w-0 flex-1">
-                            <p className="font-semibold text-[#1f2a2a] text-sm truncate">{previewTitle || 'Título'}</p>
-                            <p className="text-xs text-[#6b6a6e]">Ahora</p>
-                          </div>
+              <div className="flex-1 p-6 flex justify-center min-h-0">
+                <div className="w-[320px] rounded-[2.5rem] border-[10px] border-[#1f2a2a] bg-[#1f2a2a] shadow-2xl overflow-hidden flex flex-col max-h-full" style={{ boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
+                  <div className="h-[44px] bg-[#1f2a2a] flex items-center justify-center shrink-0">
+                    <div className="w-24 h-1.5 rounded-full bg-[#4a494d]" />
+                  </div>
+                  <div className="bg-[#f8f9fa] p-4 flex-1 min-h-0 flex flex-col">
+                    <div className="rounded-xl bg-white border border-[#4a494d]/10 shadow-sm overflow-hidden flex flex-col flex-1 min-h-0">
+                      <div className="p-3 border-b border-[#4a494d]/10 flex items-center gap-2 shrink-0">
+                        <Bell className="h-5 w-5 text-[#55c3c5] shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <p className="font-semibold text-[#1f2a2a] text-sm truncate">{previewTitle || 'Título'}</p>
+                          <p className="text-xs text-[#6b6a6e]">Ahora</p>
                         </div>
-                        <div className="p-3 text-sm text-[#3b3a3e] prose prose-sm max-w-none [&_a]:text-[#55c3c5] [&_a.email-cta-button]:bg-[#55c3c5] [&_a.email-cta-button]:text-white [&_a.email-cta-button]:px-3 [&_a.email-cta-button]:py-1.5 [&_a.email-cta-button]:rounded [&_a.email-cta-button]:no-underline" dangerouslySetInnerHTML={{ __html: previewMessage }} />
                       </div>
+                      <div className="p-3 text-sm text-[#3b3a3e] prose prose-sm max-w-none overflow-y-auto [&_a]:text-[#55c3c5] [&_a.email-cta-button]:bg-[#55c3c5] [&_a.email-cta-button]:text-white [&_a.email-cta-button]:px-3 [&_a.email-cta-button]:py-1.5 [&_a.email-cta-button]:rounded [&_a.email-cta-button]:no-underline" dangerouslySetInnerHTML={{ __html: previewMessage }} />
                     </div>
                   </div>
                 </div>
-              </ScrollArea>
+              </div>
             )}
           </ResizablePanel>
         </ResizablePanelGroup>
@@ -773,6 +776,26 @@ export function Notificaciones() {
                                   <Edit2 className="h-4 w-4" />
                                   Editar
                                 </Button>
+                                {environment === 'development' && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() =>
+                                      openPromoteFlow('notification_config', {
+                                        key: config.key,
+                                        titleTemplate: config.titleTemplate,
+                                        messageTemplate: config.messageTemplate,
+                                        deepLinkTemplate: config.deepLinkTemplate ?? null,
+                                        metadataTemplate: config.metadataTemplate ?? null,
+                                      })
+                                    }
+                                    className="gap-2"
+                                    title="Subir esta configuración a producción"
+                                  >
+                                    <Upload className="h-4 w-4" />
+                                    Subir a producción
+                                  </Button>
+                                )}
                               </div>
                             </div>
                           </CardContent>

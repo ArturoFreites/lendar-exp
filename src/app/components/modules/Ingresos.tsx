@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
+import { useApplicationsReceived } from '../../hooks/use-applications-received';
 import { ApplicationReceivedResponse, PaginationResponse } from '../../services/api';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
@@ -33,7 +33,7 @@ function endOfDayISO(dateStr: string): string {
 }
 
 export function Ingresos() {
-  const { apiService } = useAuth();
+  const appsApi = useApplicationsReceived();
   const [activeTab, setActiveTab] = useState('prestamos');
 
   // Registro de ingresos = application-received
@@ -58,12 +58,12 @@ export function Ingresos() {
   };
 
   const loadRegistroIngresos = async () => {
-    if (!apiService) return;
+    if (!appsApi.hasApi) return;
     setReceivedLoading(true);
     try {
       const params = buildRegistroParams();
-      const res = await apiService.getApplicationsReceived(params);
-      if (res.data) {
+      const res = await appsApi.getApplicationsReceived(params);
+      if (res?.data) {
         setApplicationsReceived(res.data.content ?? []);
         setReceivedPagination(res.data);
       } else {
@@ -92,10 +92,10 @@ export function Ingresos() {
 
   const handleClearFiltersAndReload = () => {
     handleClearFilters();
-    if (apiService) {
+    if (appsApi.hasApi) {
       setReceivedLoading(true);
-      apiService.getApplicationsReceived({ page: '0', size: '50', sort: 'createdAt:desc' }).then((res) => {
-        if (res.data) {
+      appsApi.getApplicationsReceived({ page: '0', size: '50', sort: 'createdAt:desc' }).then((res) => {
+        if (res?.data) {
           setApplicationsReceived(res.data.content ?? []);
           setReceivedPagination(res.data);
         } else setApplicationsReceived([]);
@@ -110,10 +110,10 @@ export function Ingresos() {
     setSelectedReceivedId(id);
     setReceivedDetail(null);
     setReceivedDetailLoading(true);
-    if (!apiService) return;
+    if (!appsApi.hasApi) return;
     try {
-      const res = await apiService.getApplicationReceivedById(id);
-      if (res.data) setReceivedDetail(res.data);
+      const res = await appsApi.getApplicationReceivedById(id);
+      if (res?.data) setReceivedDetail(res.data);
     } catch {
       toast.error('Error al cargar el detalle de la entrada');
     } finally {
@@ -132,10 +132,10 @@ export function Ingresos() {
       setReceivedDetail(null);
       return;
     }
-    if (apiService && selectedReceivedId == null) {
+    if (appsApi.hasApi && selectedReceivedId == null) {
       loadRegistroIngresos();
     }
-  }, [activeTab, apiService]);
+  }, [activeTab, appsApi.hasApi]);
 
   const statsPrestamos = [
     { label: 'Total Solicitudes', value: '1,247', icon: FileText, color: '#55c3c5', bgColor: 'bg-[#55c3c5]/10' },

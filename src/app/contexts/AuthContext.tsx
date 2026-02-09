@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback } from 'react';
-import { createApiService, AuthResponse } from '../services/api';
+import { createApiService } from '../services/api';
+import { createLoginUseCase } from '../usecases/login.usecase';
 import { initializeFirebase, initializeMessaging, getFCMToken, getPlatform } from '../services/firebase';
 import { registerSessionInvalidHandler, unregisterSessionInvalidHandler } from '../utils/sessionInvalidHandler';
 import { toast } from 'sonner';
@@ -204,38 +205,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       console.log('🔐 [LOGIN] API Service creado, baseUrl:', baseUrl);
 
-      // 2. Realizar login SIN FCM (no bloqueante)
+      const loginUseCase = createLoginUseCase(service);
       console.log('📤 [LOGIN] Enviando request de login...');
-      const response = await service.login(email, password);
-      console.log('📥 [LOGIN] Respuesta recibida, código:', response.code);
+      const result = await loginUseCase.execute(email, password);
+      console.log('📥 [LOGIN] Respuesta recibida');
 
-      // 3. Procesar respuesta
-      if (response.code === 200 && response.data) {
-        const authData: AuthResponse = response.data;
+      if (result.success) {
         console.log('✅ [LOGIN] Login exitoso');
-        console.log('✅ [LOGIN] Usuario:', authData.email);
-        console.log('✅ [LOGIN] ID:', authData.id);
-        
+        console.log('✅ [LOGIN] Usuario:', result.user.email);
+        console.log('✅ [LOGIN] ID:', result.user.id);
+
         setUser({
-          id: authData.id,
-          name: authData.name,
-          lastName: authData.lastName,
-          email: authData.email,
-          roles: authData.roles,
-          confirmEmail: authData.confirmEmail,
+          id: result.user.id,
+          name: result.user.name,
+          lastName: result.user.lastName,
+          email: result.user.email,
+          roles: result.user.roles,
+          confirmEmail: result.user.confirmEmail,
         });
         setEnvironment(env);
-        
+
         toast.success('¡Bienvenido al sistema!');
 
-        // 4. Registrar FCM después del login (no bloqueante, como petición normal)
-        // Ejecutar de forma asíncrona sin await para no bloquear, pero capturar errores
         registerFcmTokenAfterLogin(service).catch((err) => {
           console.error('❌ [FCM] Error no capturado en registerFcmTokenAfterLogin:', err);
         });
       } else {
-        console.error('❌ [LOGIN] Error en respuesta:', response.message);
-        throw new Error(response.message || 'Error al iniciar sesión');
+        console.error('❌ [LOGIN] Error en respuesta:', result.errorMessage);
+        throw new Error(result.errorMessage);
       }
     } catch (error) {
       console.error('❌ [LOGIN] Error en proceso de login:', error);

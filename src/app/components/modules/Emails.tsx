@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useEmails } from '../../hooks/use-emails';
 import { useAuth } from '../../contexts/AuthContext';
+import { useProdPromotion } from '../../contexts/ProdPromotionContext';
 import {
   EmailConfigResponse,
   EmailConfigRequest,
@@ -13,7 +15,7 @@ import { ScrollArea } from '../ui/scroll-area';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { Mail, Plus, Edit2, Search, Power, PowerOff, Layout, Eye, ArrowLeft, Save, Send } from 'lucide-react';
+import { Mail, Plus, Edit2, Search, Power, PowerOff, Layout, Eye, ArrowLeft, Save, Send, Upload } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -94,7 +96,9 @@ function buildEmailPreviewHtml(headerHtml: string, bodyHtml: string, footerHtml:
 }
 
 export function Emails() {
-  const { apiService } = useAuth();
+  const emailsApi = useEmails();
+  const { environment } = useAuth();
+  const { openPromoteFlow } = useProdPromotion();
   const [emailConfigs, setEmailConfigs] = useState<EmailConfigResponse[]>([]);
   const [layoutConfig, setLayoutConfig] = useState<EmailLayoutConfigResponse | null>(null);
   const [defaultLayout, setDefaultLayout] = useState<EmailLayoutConfigResponse | null>(null);
@@ -127,13 +131,13 @@ export function Emails() {
   const [sendTestSending, setSendTestSending] = useState(false);
 
   const loadEmailConfigs = async (page: number = 0, search?: string) => {
-    if (!apiService) return;
+    if (!emailsApi.hasApi) return;
     setConfigLoading(true);
     try {
       const params: Record<string, string> = { page: page.toString(), size: '10' };
       if (search?.trim()) params.contains = `key:${search.trim()}`;
-      const response = await apiService.getEmailConfigs(params);
-      if (response.code === 200 && response.data) {
+      const response = await emailsApi.getEmailConfigs(params);
+      if (response?.code === 200 && response.data) {
         setEmailConfigs(response.data.content || []);
         setTotalPages(response.data.totalPages || 0);
         setTotalElements(response.data.totalElements || 0);
@@ -150,11 +154,11 @@ export function Emails() {
   };
 
   const loadLayoutConfig = async () => {
-    if (!apiService) return;
+    if (!emailsApi.hasApi) return;
     setLayoutLoading(true);
     try {
-      const response = await apiService.getEmailLayoutConfig();
-      if (response.code === 200 && response.data) {
+      const response = await emailsApi.getEmailLayoutConfig();
+      if (response?.code === 200 && response.data) {
         setLayoutConfig(response.data);
         setLayoutForm({ headerHtml: response.data.headerHtml || '', footerHtml: response.data.footerHtml || '' });
       }
@@ -171,22 +175,22 @@ export function Emails() {
   }, [activeTab]);
 
   useEffect(() => {
-    if (apiService && !layoutConfig) loadLayoutConfig();
-  }, [apiService]);
+    if (emailsApi.hasApi && !layoutConfig) loadLayoutConfig();
+  }, [emailsApi.hasApi]);
 
   const loadDefaultLayout = async () => {
-    if (!apiService || defaultLayout) return;
+    if (!emailsApi.hasApi || defaultLayout) return;
     try {
-      const response = await apiService.getEmailLayoutConfigDefault();
-      if (response.code === 200 && response.data) setDefaultLayout(response.data);
+      const response = await emailsApi.getEmailLayoutConfigDefault();
+      if (response?.code === 200 && response.data) setDefaultLayout(response.data);
     } catch {
       // ignore
     }
   };
 
   useEffect(() => {
-    if (apiService && editorFullScreen !== null) loadDefaultLayout();
-  }, [apiService, editorFullScreen]);
+    if (emailsApi.hasApi && editorFullScreen !== null) loadDefaultLayout();
+  }, [emailsApi.hasApi, editorFullScreen]);
 
   const runConfigSearch = (searchValue: string) => {
     setCurrentPage(0);
@@ -226,7 +230,7 @@ export function Emails() {
   };
 
   const handleSaveConfig = async () => {
-    if (!apiService) return;
+    if (!emailsApi.hasApi) return;
     if (!configForm.key.trim()) {
       toast.error('La clave es obligatoria');
       return;
@@ -248,17 +252,17 @@ export function Emails() {
         bodyTemplate: configForm.bodyTemplate,
       };
       if (editingConfig) {
-        const response = await apiService.updateEmailConfig(editingConfig.id, request);
-        if (response.code === 200) {
+        const response = await emailsApi.updateEmailConfig(editingConfig.id, request);
+        if (response?.code === 200) {
           toast.success('Plantilla actualizada');
           closeEditorFullScreen();
-        } else toast.error(response.message || 'Error al actualizar');
+        } else toast.error(response?.message || 'Error al actualizar');
       } else {
-        const response = await apiService.createEmailConfig(request);
-        if (response.code === 200) {
+        const response = await emailsApi.createEmailConfig(request);
+        if (response?.code === 200) {
           toast.success('Plantilla creada');
           closeEditorFullScreen();
-        } else toast.error(response.message || 'Error al crear');
+        } else toast.error(response?.message || 'Error al crear');
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Error al guardar');
@@ -268,20 +272,20 @@ export function Emails() {
   };
 
   const handleToggleActive = async (config: EmailConfigResponse) => {
-    if (!apiService) return;
+    if (!emailsApi.hasApi) return;
     try {
-      const response = await apiService.updateEmailConfigActive(config.id, !config.active);
-      if (response.code === 200) {
+      const response = await emailsApi.updateEmailConfigActive(config.id, !config.active);
+      if (response?.code === 200) {
         toast.success(config.active ? 'Plantilla desactivada' : 'Plantilla activada');
         await loadEmailConfigs(currentPage, configSearch);
-      } else toast.error(response.message || 'Error al actualizar estado');
+      } else toast.error(response?.message || 'Error al actualizar estado');
     } catch {
       toast.error('Error al actualizar estado');
     }
   };
 
   const handleSendTestEmail = async () => {
-    if (!apiService || !editingConfig) return;
+    if (!emailsApi.hasApi || !editingConfig) return;
     const email = sendTestEmail.trim();
     if (!email) {
       toast.error('Ingresá un email de destino');
@@ -289,8 +293,8 @@ export function Emails() {
     }
     setSendTestSending(true);
     try {
-      const response = await apiService.sendEmailConfigTest(editingConfig.id, email);
-      if (response.code === 200) {
+      const response = await emailsApi.sendEmailConfigTest(editingConfig.id, email);
+      if (response?.code === 200) {
         toast.success('Email de ejemplo enviado correctamente');
         setSendTestDialogOpen(false);
         setSendTestEmail('');
@@ -305,14 +309,14 @@ export function Emails() {
   };
 
   const handleSaveLayout = async () => {
-    if (!apiService) return;
+    if (!emailsApi.hasApi) return;
     setLayoutSaving(true);
     try {
-      const response = await apiService.updateEmailLayoutConfig(layoutForm);
-      if (response.code === 200) {
+      const response = await emailsApi.updateEmailLayoutConfig(layoutForm);
+      if (response?.code === 200 && response.data) {
         toast.success('Layout actualizado');
         setLayoutConfig(response.data);
-      } else toast.error(response.message || 'Error al guardar layout');
+      } else toast.error(response?.message || 'Error al guardar layout');
     } catch {
       toast.error('Error al guardar layout');
     } finally {
@@ -464,17 +468,17 @@ export function Emails() {
               </Button>
             </div>
             {showPreview && (
-              <ScrollArea className="flex-1 p-6">
-                <div className="rounded-xl overflow-hidden border border-[#4a494d]/10 shadow-sm min-h-[400px] bg-[#f3f7f7]">
+              <div className="flex-1 flex flex-col min-h-0 p-6">
+                <div className="rounded-xl overflow-hidden border border-[#4a494d]/10 shadow-sm bg-[#f3f7f7] flex-1 min-h-0 overflow-y-auto">
                   <div
-                    className="text-left"
+                    className="text-left p-4"
                     style={{ maxWidth: 640, margin: '0 auto' }}
                     dangerouslySetInnerHTML={{
                       __html: previewHtml(configForm.bodyTemplate),
                     }}
                   />
                 </div>
-              </ScrollArea>
+              </div>
             )}
           </ResizablePanel>
         </ResizablePanelGroup>
@@ -604,6 +608,25 @@ export function Emails() {
                                   <Edit2 className="h-4 w-4" />
                                   Editar
                                 </Button>
+                                {environment === 'development' && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() =>
+                                      openPromoteFlow('email_config', {
+                                        key: config.key,
+                                        description: config.description ?? undefined,
+                                        subjectTemplate: config.subjectTemplate,
+                                        bodyTemplate: config.bodyTemplate,
+                                      })
+                                    }
+                                    className="gap-2"
+                                    title="Subir esta plantilla de email a producción"
+                                  >
+                                    <Upload className="h-4 w-4" />
+                                    Subir a producción
+                                  </Button>
+                                )}
                               </div>
                             </div>
                           </CardContent>
@@ -709,10 +732,10 @@ export function Emails() {
                       <Eye className="h-4 w-4 text-[#6b6a6e]" />
                       <span className="text-sm font-medium text-[#6b6a6e]">Vista previa (arrastrá el borde para cambiar el ancho)</span>
                     </div>
-                    <ScrollArea className="flex-1 p-6">
-                      <div className="rounded-xl overflow-hidden border border-[#4a494d]/10 shadow-sm min-h-[400px] bg-[#f3f7f7]">
+                    <div className="flex-1 flex flex-col min-h-0 p-6">
+                      <div className="rounded-xl overflow-hidden border border-[#4a494d]/10 shadow-sm bg-[#f3f7f7] flex-1 min-h-0 overflow-y-auto">
                         <div
-                          className="text-left"
+                          className="text-left p-4"
                           style={{ maxWidth: 640, margin: '0 auto' }}
                           dangerouslySetInnerHTML={{
                             __html: (() => {
@@ -724,7 +747,7 @@ export function Emails() {
                           }}
                         />
                       </div>
-                    </ScrollArea>
+                    </div>
                   </ResizablePanel>
                 </ResizablePanelGroup>
               )}
