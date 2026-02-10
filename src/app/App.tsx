@@ -19,6 +19,7 @@ import { Usuarios } from './components/modules/Usuarios';
 import { Escribanias } from './components/modules/Escribanias';
 import { Regiones } from './components/modules/Regiones';
 import { Franquicias } from './components/modules/Franquicias';
+import { Utilidades } from './components/modules/Utilidades';
 import { ProdCredentialsDialog } from './components/ProdCredentialsDialog';
 import { PromoteConfirmDialog } from './components/PromoteConfirmDialog';
 import { Toaster } from './components/ui/sonner';
@@ -108,6 +109,8 @@ function AppContent() {
         return <Emails />;
       case 'usuarios':
         return <Usuarios />;
+      case 'utilidades':
+        return <Utilidades />;
       default:
         return <Dashboard />;
     }

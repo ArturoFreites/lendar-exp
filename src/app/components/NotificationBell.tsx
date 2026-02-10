@@ -17,7 +17,6 @@ import {
 import { useNotifications } from '../contexts/NotificationContext';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Button } from './ui/button';
-import { Badge } from './ui/badge';
 import { ScrollArea } from './ui/scroll-area';
 import { Input } from './ui/input';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs';
@@ -50,16 +49,16 @@ const getNotificationColor = (type: string) => {
   switch (type?.toUpperCase()) {
     case 'INFO':
     case 'INFORMATION':
-      return 'bg-blue-500';
+      return 'bg-blue-600';
     case 'SUCCESS':
-      return 'bg-green-500';
+      return 'bg-emerald-600';
     case 'WARNING':
-      return 'bg-yellow-500';
+      return 'bg-amber-500';
     case 'ERROR':
     case 'DANGER':
-      return 'bg-red-500';
+      return 'bg-red-600';
     default:
-      return 'bg-[#55c3c5]';
+      return 'bg-[#0d9488]';
   }
 };
 
@@ -156,51 +155,55 @@ export function NotificationBell() {
         <Button
           variant="ghost"
           size="icon"
-          className="relative h-10 w-10 rounded-full hover:bg-[#4a494d]/50 transition-all duration-300 hover:scale-110 active:scale-95"
+          className="relative h-9 w-9 rounded-lg hover:bg-[#4a494d]/15 transition-colors duration-200"
+          aria-label="Notificaciones"
         >
           <Bell className={cn(
-            "h-5 w-5 text-[#9b9a9e] transition-all duration-300",
-            unreadCount > 0 && "text-[#55c3c5] animate-pulse",
-            "group-hover:text-[#fefeff]"
+            "h-5 w-5 text-[#5a5960] transition-colors duration-200",
+            unreadCount > 0 && "text-[#0d9488]"
           )} />
           {unreadCount > 0 && (
-            <Badge
+            <span
+              key={unreadCount}
               className={cn(
-                "absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs font-bold",
-                "bg-[#55c3c5] text-white border-2 border-white",
-                "animate-bounce shadow-lg shadow-[#55c3c5]/50"
+                "absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-md",
+                "bg-[#0d9488] text-white text-[11px] font-semibold leading-none px-1",
+                "ring-2 ring-white animate-badge-jump"
               )}
             >
-              {unreadCount > 9 ? '9+' : unreadCount}
-            </Badge>
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </span>
           )}
         </Button>
       </PopoverTrigger>
       <PopoverContent 
         align="end" 
-        className="w-[90vw] max-w-[420px] sm:w-[420px] p-0 bg-white border-[#4a494d]/20 shadow-xl"
+        className="w-[90vw] max-w-[440px] sm:w-[440px] p-0 bg-white border border-[#e5e4e8] shadow-[0_4px_24px_rgba(0,0,0,0.08)] rounded-xl overflow-hidden"
         sideOffset={8}
       >
         <div className="flex flex-col max-h-[85vh] sm:max-h-[650px] h-[85vh] sm:h-[650px]">
           {/* Header */}
-          <div className="flex flex-col gap-2 sm:gap-3 p-3 sm:p-4 border-b border-[#4a494d]/20 bg-gradient-to-r from-[#fefeff] to-[#f8f9fa] flex-shrink-0">
+          <div className="flex flex-col gap-3 p-4 border-b border-[#e5e4e8] bg-[#fafafa] flex-shrink-0">
             <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
-                <Bell className="h-4 w-4 sm:h-5 sm:w-5 text-[#55c3c5] flex-shrink-0" />
-                <h3 className="font-semibold text-sm sm:text-base text-[#3b3a3e] truncate">Notificaciones</h3>
-                {unreadCount > 0 && (
-                  <Badge className="bg-[#55c3c5] text-white text-[10px] sm:text-xs flex-shrink-0">
-                    {unreadCount} nueva{unreadCount !== 1 ? 's' : ''}
-                  </Badge>
-                )}
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#0d9488]/10">
+                  <Bell className="h-4 w-4 text-[#0d9488] flex-shrink-0" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="font-semibold text-[15px] text-[#1c1b1f] truncate">Notificaciones</h3>
+                  {unreadCount > 0 && (
+                    <p className="text-xs text-[#5a5960]">
+                      {unreadCount} sin leer
+                    </p>
+                  )}
+                </div>
               </div>
-              <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
-                {/* Indicador de estado de conexión */}
+              <div className="flex items-center gap-1 flex-shrink-0">
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <div className={cn(
-                      "h-2 w-2 rounded-full transition-all cursor-help flex-shrink-0",
-                      isConnected ? "bg-green-500" : "bg-yellow-500 animate-pulse"
+                      "h-2 w-2 rounded-full cursor-help flex-shrink-0",
+                      isConnected ? "bg-emerald-500" : "bg-amber-500"
                     )} />
                   </TooltipTrigger>
                   <TooltipContent>
@@ -211,31 +214,30 @@ export function NotificationBell() {
                     </p>
                   </TooltipContent>
                 </Tooltip>
-                
                 {unreadCount > 0 && (
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={handleMarkAllAsRead}
-                    className="h-7 sm:h-8 px-1.5 sm:px-2 text-[10px] sm:text-xs text-[#6b6a6e] hover:text-[#3b3a3e]"
+                    className="h-8 px-2 text-xs text-[#5a5960] hover:text-[#1c1b1f] hover:bg-[#e5e4e8]/50"
                     title="Marcar todas como leídas"
                   >
-                    <CheckCheck className="h-3.5 w-3.5 sm:h-4 sm:w-4 sm:mr-1" />
-                    <span className="hidden sm:inline">Todas</span>
+                    <CheckCheck className="h-4 w-4 sm:mr-1" />
+                    <span className="hidden sm:inline">Marcar todas</span>
                   </Button>
                 )}
                 <Button
                   variant="ghost"
-                  size="sm"
+                  size="icon"
                   onClick={refreshNotifications}
                   disabled={loading}
-                  className="h-7 w-7 sm:h-8 sm:w-8 p-0 flex-shrink-0"
+                  className="h-8 w-8 text-[#5a5960] hover:text-[#1c1b1f] hover:bg-[#e5e4e8]/50"
                   title="Actualizar"
                 >
                   {loading ? (
-                    <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin text-[#55c3c5]" />
+                    <Loader2 className="h-4 w-4 animate-spin text-[#0d9488]" />
                   ) : (
-                    <span className="text-[#6b6a6e] hover:text-[#3b3a3e] text-sm sm:text-base">↻</span>
+                    <span className="text-base font-medium">↻</span>
                   )}
                 </Button>
               </div>
@@ -243,42 +245,45 @@ export function NotificationBell() {
 
             {/* Búsqueda */}
             <div className="relative">
-              <Search className="absolute left-2.5 sm:left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-[#9b9a9e]" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#78767a]" />
               <Input
                 placeholder="Buscar notificaciones..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-8 sm:pl-9 h-8 sm:h-9 text-xs sm:text-sm bg-white border-[#4a494d]/20 focus:border-[#55c3c5]"
+                className="pl-9 h-9 text-sm bg-white border-[#e5e4e8] text-[#1c1b1f] placeholder:text-[#78767a] focus:border-[#0d9488] focus-visible:ring-[#0d9488]/20"
               />
               {searchQuery && (
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 sm:h-7 sm:w-7 p-0"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0 text-[#78767a] hover:text-[#1c1b1f]"
                 >
-                  <X className="h-3 w-3" />
+                  <X className="h-3.5 w-3.5" />
                 </Button>
               )}
             </div>
 
             {/* Filtros */}
             <Tabs value={filter} onValueChange={(v) => setFilter(v as FilterType)} className="w-full">
-              <TabsList className="grid w-full grid-cols-3 h-8 sm:h-9 bg-[#f8f9fa]">
-                <TabsTrigger value="all" className="text-[10px] sm:text-xs px-1 sm:px-3">
-                  <span className="sm:hidden">Todas</span>
-                  <span className="hidden sm:inline">Todas</span>
-                  <span className="ml-1">({notifications.length})</span>
+              <TabsList className="grid w-full grid-cols-3 h-9 bg-[#eeeef0] p-0.5 rounded-lg">
+                <TabsTrigger 
+                  value="all" 
+                  className="text-xs font-medium text-[#5a5960] data-[state=active]:bg-white data-[state=active]:text-[#1c1b1f] data-[state=active]:shadow-sm rounded-md px-3"
+                >
+                  Todas <span className="ml-1 opacity-70">({notifications.length})</span>
                 </TabsTrigger>
-                <TabsTrigger value="unread" className="text-[10px] sm:text-xs px-1 sm:px-3">
-                  <span className="sm:hidden">No</span>
-                  <span className="hidden sm:inline">No leídas</span>
-                  <span className="ml-1">({unreadNotifications.length})</span>
+                <TabsTrigger 
+                  value="unread" 
+                  className="text-xs font-medium text-[#5a5960] data-[state=active]:bg-white data-[state=active]:text-[#1c1b1f] data-[state=active]:shadow-sm rounded-md px-3"
+                >
+                  No leídas <span className="ml-1 opacity-70">({unreadNotifications.length})</span>
                 </TabsTrigger>
-                <TabsTrigger value="read" className="text-[10px] sm:text-xs px-1 sm:px-3">
-                  <span className="sm:hidden">Sí</span>
-                  <span className="hidden sm:inline">Leídas</span>
-                  <span className="ml-1">({notifications.length - unreadNotifications.length})</span>
+                <TabsTrigger 
+                  value="read" 
+                  className="text-xs font-medium text-[#5a5960] data-[state=active]:bg-white data-[state=active]:text-[#1c1b1f] data-[state=active]:shadow-sm rounded-md px-3"
+                >
+                  Leídas <span className="ml-1 opacity-70">({notifications.length - unreadNotifications.length})</span>
                 </TabsTrigger>
               </TabsList>
             </Tabs>
@@ -300,38 +305,38 @@ export function NotificationBell() {
                 ))}
               </div>
             ) : !hasNotifications ? (
-              <div className="flex flex-col items-center justify-center py-16 px-4">
+              <div className="flex flex-col items-center justify-center py-16 px-6">
                 <div className={cn(
-                  "h-16 w-16 rounded-full flex items-center justify-center mb-4",
-                  searchQuery ? "bg-yellow-100" : "bg-[#55c3c5]/10"
+                  "h-14 w-14 rounded-xl flex items-center justify-center mb-4",
+                  searchQuery ? "bg-amber-50" : "bg-[#0d9488]/10"
                 )}>
                   {searchQuery ? (
-                    <Search className="h-8 w-8 text-yellow-600" />
+                    <Search className="h-7 w-7 text-amber-600" />
                   ) : (
-                    <Bell className="h-8 w-8 text-[#55c3c5] opacity-50" />
+                    <Bell className="h-7 w-7 text-[#0d9488]/60" />
                   )}
                 </div>
-                <p className="text-sm font-medium text-[#3b3a3e] mb-1">
+                <p className="text-[15px] font-medium text-[#1c1b1f] mb-1">
                   {searchQuery ? 'No se encontraron resultados' : 'No hay notificaciones'}
                 </p>
-                <p className="text-xs text-[#6b6a6e] text-center">
+                <p className="text-sm text-[#5a5960] text-center max-w-[260px]">
                   {searchQuery 
-                    ? 'Intenta con otros términos de búsqueda' 
-                    : 'Las notificaciones aparecerán aquí cuando las recibas'}
+                    ? 'Prueba con otras palabras' 
+                    : 'Aquí aparecerán tus notificaciones cuando las recibas'}
                 </p>
                 {searchQuery && (
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => setSearchQuery('')}
-                    className="mt-3 text-xs"
+                    className="mt-4 text-sm text-[#0d9488] hover:bg-[#0d9488]/10"
                   >
                     Limpiar búsqueda
                   </Button>
                 )}
               </div>
             ) : (
-              <div className="p-2 sm:p-3">
+              <div className="p-3">
                 {Object.entries(groupedNotifications).map(([groupName, groupNotifications]) => {
                   if (groupNotifications.length === 0) return null;
 
@@ -344,17 +349,17 @@ export function NotificationBell() {
                   };
 
                   return (
-                    <div key={groupName} className="mb-4">
-                      <div className="flex items-center gap-2 px-2 sm:px-3 py-2 mb-2">
-                        <Calendar className="h-3.5 w-3.5 text-[#9b9a9e] flex-shrink-0" />
-                        <span className="text-[10px] sm:text-xs font-semibold text-[#6b6a6e] uppercase tracking-wide">
+                    <div key={groupName} className="mb-5">
+                      <div className="flex items-center gap-2 px-1 py-2 mb-2">
+                        <Calendar className="h-3.5 w-3.5 text-[#78767a] flex-shrink-0" />
+                        <span className="text-xs font-semibold text-[#5a5960] uppercase tracking-wider">
                           {groupLabels[groupName]}
                         </span>
-                        <Badge variant="outline" className="text-[10px] sm:text-xs h-5 px-1.5 ml-auto border-[#4a494d]/20">
+                        <span className="ml-auto text-xs text-[#78767a] tabular-nums">
                           {groupNotifications.length}
-                        </Badge>
+                        </span>
                       </div>
-                      <div className="space-y-1">
+                      <div className="space-y-2">
                         {groupNotifications.map((notification) => {
                           const isUnread = !notification.readAt;
                           const isMarking = markingAsRead === notification.id;
@@ -365,11 +370,10 @@ export function NotificationBell() {
                             <div
                               key={notification.id}
                               className={cn(
-                                "group relative p-2 sm:p-3 rounded-lg transition-all duration-200 cursor-pointer",
-                                "hover:bg-[#f8f9fa] hover:shadow-sm",
+                                "group relative p-3 rounded-xl transition-colors duration-150 cursor-pointer border",
                                 isUnread 
-                                  ? "bg-[#55c3c5]/5 border-l-2 border-l-[#55c3c5]" 
-                                  : "bg-white border-l-2 border-l-transparent"
+                                  ? "bg-[#f0fdfa] border-[#0d9488]/20 hover:bg-[#ecfdf8]" 
+                                  : "bg-white border-[#e5e4e8] hover:bg-[#fafafa] hover:border-[#e0dfe3]"
                               )}
                               onClick={() => {
                                 if (isUnread && !isMarking) {
@@ -377,63 +381,47 @@ export function NotificationBell() {
                                 }
                               }}
                             >
-                              <div className="flex items-start gap-2 sm:gap-3">
-                                {/* Icono */}
+                              <div className="flex items-start gap-3">
                                 <div className={cn(
-                                  "h-8 w-8 sm:h-9 sm:w-9 rounded-lg flex items-center justify-center flex-shrink-0",
+                                  "h-9 w-9 rounded-lg flex items-center justify-center flex-shrink-0",
                                   iconColor,
-                                  "text-white shadow-sm"
+                                  "text-white"
                                 )}>
-                                  <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                  <Icon className="h-4 w-4" />
                                 </div>
 
-                                {/* Contenido */}
                                 <div className="flex-1 min-w-0">
-                                  <div className="flex items-start justify-between gap-2 mb-1">
+                                  <div className="flex items-start justify-between gap-2 mb-0.5">
                                     <h4 className={cn(
-                                      "font-semibold text-xs sm:text-sm leading-tight break-words",
-                                      isUnread ? "text-[#3b3a3e]" : "text-[#6b6a6e]"
+                                      "font-semibold text-[14px] leading-snug break-words",
+                                      isUnread ? "text-[#1c1b1f]" : "text-[#3d3c42]"
                                     )}>
                                       {notification.title}
                                     </h4>
                                     {isUnread && (
-                                      <div className="h-2 w-2 rounded-full bg-[#55c3c5] flex-shrink-0 mt-1.5 animate-pulse" />
+                                      <span className="h-2 w-2 rounded-full bg-[#0d9488] flex-shrink-0 mt-1.5" aria-hidden />
                                     )}
                                   </div>
-                                  <p className="text-xs sm:text-sm text-[#6b6a6e] mb-2 line-clamp-2 leading-relaxed break-words">
+                                  <p className="text-[13px] text-[#5a5960] mb-2 line-clamp-2 leading-relaxed break-words">
                                     {notification.message}
                                   </p>
-                                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-[10px] sm:text-xs text-[#9b9a9e]">
-                                    <div className="flex items-center gap-1">
-                                      <Clock className="h-3 w-3 flex-shrink-0" />
-                                      <span className="whitespace-nowrap">
-                                        {isToday(new Date(notification.createdAt))
-                                          ? formatDistanceToNow(new Date(notification.createdAt), { 
-                                              addSuffix: true, 
-                                              locale: es 
-                                            })
-                                          : format(new Date(notification.createdAt), 'PPp', { locale: es })
-                                        }
-                                      </span>
-                                    </div>
-                                    <Badge 
-                                      variant="outline" 
-                                      className="text-[10px] sm:text-xs border-[#4a494d]/20 px-1.5 py-0"
-                                    >
-                                      {notification.type}
-                                    </Badge>
+                                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#78767a]">
+                                    <span className="flex items-center gap-1 whitespace-nowrap">
+                                      <Clock className="h-3.5 w-3.5 flex-shrink-0" />
+                                      {isToday(new Date(notification.createdAt))
+                                        ? formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true, locale: es })
+                                        : format(new Date(notification.createdAt), 'PPp', { locale: es })}
+                                    </span>
+                                    <span className="text-[#9b9a9e]">·</span>
+                                    <span className="font-medium text-[#5a5960]">{notification.type}</span>
                                   </div>
                                 </div>
 
-                                {/* Botón de acción */}
                                 {isUnread && (
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    className={cn(
-                                      "h-6 w-6 sm:h-7 sm:w-7 p-0 flex-shrink-0 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity",
-                                      "hover:bg-[#55c3c5]/10"
-                                    )}
+                                    className="h-8 w-8 p-0 flex-shrink-0 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity text-[#0d9488] hover:bg-[#0d9488]/10"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       handleMarkAsRead(notification.id);
@@ -442,9 +430,9 @@ export function NotificationBell() {
                                     title="Marcar como leída"
                                   >
                                     {isMarking ? (
-                                      <Loader2 className="h-3 w-3 sm:h-3.5 sm:w-3.5 animate-spin text-[#55c3c5]" />
+                                      <Loader2 className="h-4 w-4 animate-spin" />
                                     ) : (
-                                      <Check className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-[#55c3c5]" />
+                                      <Check className="h-4 w-4" />
                                     )}
                                   </Button>
                                 )}
@@ -462,10 +450,10 @@ export function NotificationBell() {
 
           {/* Footer */}
           {hasNotifications && (
-            <div className="p-2 sm:p-3 border-t border-[#4a494d]/20 bg-[#f8f9fa] flex-shrink-0">
+            <div className="p-3 border-t border-[#e5e4e8] bg-[#fafafa] flex-shrink-0">
               <Button
                 variant="ghost"
-                className="w-full text-xs sm:text-sm text-[#55c3c5] hover:text-[#4ab3b5] hover:bg-[#55c3c5]/10"
+                className="w-full text-sm font-medium text-[#0d9488] hover:text-[#0f766e] hover:bg-[#0d9488]/10 rounded-lg h-10"
                 onClick={() => {
                   setOpen(false);
                   window.location.hash = '#notificaciones';

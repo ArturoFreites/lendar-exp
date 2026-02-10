@@ -435,3 +435,54 @@ export interface FranchiseUpdateRequest {
   responsible?: string;
   coverage?: CoverageAreaRequest[];
 }
+
+export interface NormalizeAddressesJobStartResponse {
+  jobId: string;
+}
+
+export interface NormalizeAddressesJobStatusResponse {
+  jobId: string;
+  status: string;
+  total: number;
+  processed: number;
+  percentage: number;
+  startedAt?: string;
+  finishedAt?: string | null;
+  errorMessage?: string | null;
+}
+
+export interface TermConfigItem {
+  tna: number;
+  name: string;
+  value: number;
+}
+
+export interface InvestmentFeeItemBackend {
+  minAmount: number | null;
+  maxAmount: number | null;
+  fee: number;
+}
+
+export interface ApplicationConfigResponse {
+  id: number;
+  bill: number;
+  fee: number;
+  maxPropertyPercentage: number;
+  minAmount: number;
+  minAmountToInvest: number;
+  iva: number;
+  termConfigs: TermConfigItem[];
+  investmentFees: InvestmentFeeItemBackend[];
+  active: boolean;
+}
+
+export interface ApplicationConfigRequest {
+  bill: number;
+  fee: number;
+  maxPropertyPercentage: number;
+  minAmount: number;
+  minAmountToInvest: number;
+  iva: number;
+  termConfigs: TermConfigItem[];
+  investmentFees: InvestmentFeeItemBackend[];
+}

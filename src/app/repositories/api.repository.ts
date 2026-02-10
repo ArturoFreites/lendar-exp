@@ -7,6 +7,8 @@ import type { NotaryOfficesRepository } from './notary-offices.repository';
 import type { TaskConfigRepository } from './task-config.repository';
 import type { RegionsRepository } from './regions.repository';
 import type { FranchisesRepository } from './franchises.repository';
+import type { UtilitiesRepository } from './utilities.repository';
+import type { ApplicationConfigRepository } from './application-config.repository';
 
 export type ApiRepository = AuthRepository &
   NotificationsRepository &
@@ -16,7 +18,9 @@ export type ApiRepository = AuthRepository &
   NotaryOfficesRepository &
   TaskConfigRepository &
   RegionsRepository &
-  FranchisesRepository;
+  FranchisesRepository &
+  UtilitiesRepository &
+  ApplicationConfigRepository;
 
 export type {
   AuthRepository,
@@ -28,4 +32,6 @@ export type {
   TaskConfigRepository,
   RegionsRepository,
   FranchisesRepository,
+  UtilitiesRepository,
+  ApplicationConfigRepository,
 };

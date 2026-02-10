@@ -46,6 +46,10 @@ import type {
   FranchiseUpdateRequest,
   CoverageAreaResponse,
   CoverageAreaRequest,
+  NormalizeAddressesJobStartResponse,
+  NormalizeAddressesJobStatusResponse,
+  ApplicationConfigResponse,
+  ApplicationConfigRequest,
 } from '../types/dto';
 
 export class HttpApiAdapter implements ApiRepository {
@@ -606,6 +610,38 @@ export class HttpApiAdapter implements ApiRepository {
     return this.request<CoverageAreaResponse[]>(`/backoffice/api/franchise/${id}/coverage`, {
       method: 'PUT',
       body: JSON.stringify(areas),
+    });
+  }
+
+  async startNormalizeAddresses(): Promise<QrResponse<NormalizeAddressesJobStartResponse>> {
+    return this.request<NormalizeAddressesJobStartResponse>('/backoffice/api/task/normalize-addresses', {
+      method: 'POST',
+    });
+  }
+
+  async getNormalizeAddressesJobStatus(jobId: string): Promise<QrResponse<NormalizeAddressesJobStatusResponse>> {
+    return this.request<NormalizeAddressesJobStatusResponse>(
+      `/backoffice/api/job/normalize-addresses/${jobId}`,
+      { method: 'GET' }
+    );
+  }
+
+  async getApplicationConfigLast(): Promise<QrResponse<ApplicationConfigResponse>> {
+    return this.request<ApplicationConfigResponse>('/backoffice/api/applicationConfig/last', { method: 'GET' });
+  }
+
+  async getApplicationConfigList(params?: Record<string, string>): Promise<QrResponse<PaginationResponse<ApplicationConfigResponse>>> {
+    const queryString = params ? new URLSearchParams(params).toString() : '';
+    const endpoint = `/backoffice/api/applicationConfig${queryString ? `?${queryString}` : ''}`;
+    const response = await this.request<BackendPaginationResponse<ApplicationConfigResponse>>(endpoint, { method: 'GET' });
+    if (response.data) return { ...response, data: this.normalizePaginationResponse(response.data) };
+    return { ...response, data: null };
+  }
+
+  async createApplicationConfig(request: ApplicationConfigRequest): Promise<QrResponse<null>> {
+    return this.request<null>('/backoffice/api/applicationConfig', {
+      method: 'POST',
+      body: JSON.stringify(request),
     });
   }
 }

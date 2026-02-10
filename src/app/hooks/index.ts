@@ -6,3 +6,4 @@ export { useNotaryOffices } from './use-notary-offices';
 export { useTaskConfig } from './use-task-config';
 export { useRegions } from './use-regions';
 export { useFranchises } from './use-franchises';
+export { useApplicationConfig } from './use-application-config';
