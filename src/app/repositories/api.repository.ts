@@ -9,11 +9,13 @@ import type { RegionsRepository } from './regions.repository';
 import type { FranchisesRepository } from './franchises.repository';
 import type { UtilitiesRepository } from './utilities.repository';
 import type { ApplicationConfigRepository } from './application-config.repository';
+import type { MigratedPersonRepository } from './migrated-person.repository';
 
 export type ApiRepository = AuthRepository &
   NotificationsRepository &
   EmailConfigRepository &
   UsersRepository &
+  MigratedPersonRepository &
   ApplicationsRepository &
   NotaryOfficesRepository &
   TaskConfigRepository &
@@ -27,6 +29,7 @@ export type {
   NotificationsRepository,
   EmailConfigRepository,
   UsersRepository,
+  MigratedPersonRepository,
   ApplicationsRepository,
   NotaryOfficesRepository,
   TaskConfigRepository,

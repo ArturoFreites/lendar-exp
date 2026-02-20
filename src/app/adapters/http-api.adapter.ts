@@ -16,6 +16,7 @@ import type {
   EmailLayoutConfigResponse,
   UserProfileResponse,
   UserResponse,
+  MigratedPersonResponse,
   UserRoleUpdaterRequest,
   UserUpdateRequest,
   UserFcmTokenRequest,
@@ -324,6 +325,14 @@ export class HttpApiAdapter implements ApiRepository {
     const queryString = params ? new URLSearchParams(params).toString() : '';
     const endpoint = `/backoffice/api/user${queryString ? `?${queryString}` : ''}`;
     const response = await this.request<BackendPaginationResponse<UserResponse>>(endpoint, { method: 'GET' });
+    if (response.data) return { ...response, data: this.normalizePaginationResponse(response.data) };
+    return { ...response, data: null };
+  }
+
+  async getMigratedPersons(params?: Record<string, string>): Promise<QrResponse<PaginationResponse<MigratedPersonResponse>>> {
+    const queryString = params ? new URLSearchParams(params).toString() : '';
+    const endpoint = `/backoffice/api/migratedPerson${queryString ? `?${queryString}` : ''}`;
+    const response = await this.request<BackendPaginationResponse<MigratedPersonResponse>>(endpoint, { method: 'GET' });
     if (response.data) return { ...response, data: this.normalizePaginationResponse(response.data) };
     return { ...response, data: null };
   }

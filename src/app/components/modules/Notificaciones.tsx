@@ -267,7 +267,7 @@ export function Notificaciones() {
   };
 
   const handleSaveConfig = async () => {
-    if (!apiService) return;
+    if (!notificationApi.hasApi) return;
 
     if (!configForm.key.trim()) {
       toast.error('La clave es obligatoria');

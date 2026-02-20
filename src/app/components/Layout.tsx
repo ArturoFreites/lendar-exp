@@ -16,6 +16,7 @@ import {
   MapPin,
   Store,
   Wrench,
+  UserCheck,
 } from 'lucide-react';
 import logoImage from '../../assets/65d1f35782e19a4a8c4d56fc288c48d07bab3eaa.png';
 
@@ -39,6 +40,7 @@ export function Layout({ children, currentModule, onModuleChange }: LayoutProps)
     { id: 'notificaciones', name: 'Notificaciones', icon: Bell },
     { id: 'emails', name: 'Emails', icon: Mail },
     { id: 'usuarios', name: 'Usuarios', icon: User },
+    { id: 'migracion', name: 'Migración', icon: UserCheck },
     { id: 'utilidades', name: 'Utilidades', icon: Wrench },
   ];
 

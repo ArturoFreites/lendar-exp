@@ -71,7 +71,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   }, [markNotificationAsRead, hasApi]);
 
   const markAllAsRead = useCallback(async () => {
-    if (!apiService) return;
+    if (!hasApi) return;
 
     const unreadNotifications = notifications.filter(n => !n.readAt);
     if (unreadNotifications.length === 0) return;
@@ -81,7 +81,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('Error al marcar todas como leídas:', error);
     }
-  }, [notifications, markAsRead]);
+  }, [notifications, markAsRead, hasApi]);
 
   // Función para procesar notificaciones recibidas
   const handleNotificationReceived = useCallback((notification: NotificationResponse) => {

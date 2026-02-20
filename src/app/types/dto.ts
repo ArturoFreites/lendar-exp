@@ -144,6 +144,19 @@ export interface UserResponse {
   roles: RoleResponse[];
 }
 
+export interface MigratedPersonResponse {
+  id: number;
+  name: string;
+  lastName: string;
+  dni: string;
+  email: string;
+  isApplication: boolean | null;
+  isInvestment: boolean | null;
+  applicationNumber: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface RoleResponse {
   id: number;
   name: string;
