@@ -131,7 +131,7 @@ export function useUsers() {
   );
 
   const updateUserRole = useCallback(
-    async (request: { type: string; userId: number }) => {
+    async (request: { userId: number; roleIds: number[] }) => {
       if (!apiService) return null;
       return createUpdateUserRoleUseCase(apiService).execute(request);
     },

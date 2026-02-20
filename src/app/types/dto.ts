@@ -175,8 +175,8 @@ export interface RoleRequest {
 }
 
 export interface UserRoleUpdaterRequest {
-  type: string;
   userId: number;
+  roleIds: number[];
 }
 
 export interface PermissionRequest {

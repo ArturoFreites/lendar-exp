@@ -338,7 +338,7 @@ export class HttpApiAdapter implements ApiRepository {
   }
 
   async updateUserRole(request: UserRoleUpdaterRequest): Promise<QrResponse<null>> {
-    return this.request<null>('/backoffice/api/user/role', { method: 'PUT', body: JSON.stringify(request) });
+    return this.request<null>('/backoffice/api/user/assign-role', { method: 'PUT', body: JSON.stringify(request) });
   }
 
   async updateUser(request: UserUpdateRequest): Promise<QrResponse<null>> {

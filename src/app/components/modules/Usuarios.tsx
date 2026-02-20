@@ -110,7 +110,7 @@ export function Usuarios() {
   // User-Role assignment state
   const [isUserRoleDialogOpen, setIsUserRoleDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserResponse | null>(null);
-  const [selectedRoleId, setSelectedRoleId] = useState<number | null>(null);
+  const [selectedRoleIds, setSelectedRoleIds] = useState<number[]>([]);
 
   const loadSessions = async () => {
     if (!usersApi.hasApi) {
@@ -314,11 +314,13 @@ export function Usuarios() {
 
     if (role) {
       setEditingRole(role);
-      // Cargar los permisos del rol
       const roleData = await loadRole(role.id);
+      if (!roleData && role.id) {
+        toast.error('No se pudieron cargar los permisos del rol. Reintenta o verifica la conexión.');
+      }
       setRoleForm({
         name: role.name,
-        permissionIds: roleData?.permissions?.map(p => p.id) || [],
+        permissionIds: roleData?.permissions?.map(p => p.id) ?? [],
       });
     } else {
       setEditingRole(null);
@@ -384,47 +386,45 @@ export function Usuarios() {
   };
 
   const handleOpenUserRoleDialog = async (user: UserResponse) => {
-    // Cargar roles disponibles si no están cargados
     if (roles.length === 0) {
       await loadRoles(0);
     }
-    
     setSelectedUser(user);
-    setSelectedRoleId(user.roles[0]?.id || null);
+    setSelectedRoleIds(user.roles?.map((r) => r.id) ?? []);
     setIsUserRoleDialogOpen(true);
   };
 
   const handleSaveUserRole = async () => {
     if (!usersApi.hasApi || !selectedUser) return;
 
-    if (!selectedRoleId) {
-      toast.error('Debes seleccionar un rol');
-      return;
-    }
-
-    const selectedRole = roles.find(r => r.id === selectedRoleId);
-    if (!selectedRole) {
-      toast.error('Rol no encontrado');
+    if (selectedRoleIds.length === 0) {
+      toast.error('Debes seleccionar al menos un rol');
       return;
     }
 
     try {
       const request: UserRoleUpdaterRequest = {
         userId: selectedUser.id,
-        type: selectedRole.name,
+        roleIds: selectedRoleIds,
       };
 
       const response = await usersApi.updateUserRole(request);
       if (response.code === 200) {
-        toast.success('Rol asignado correctamente');
+        toast.success('Roles asignados correctamente');
         setIsUserRoleDialogOpen(false);
         await loadUsers(usersCurrentPage, userSearch);
       } else {
-        toast.error(response.message || 'Error al asignar rol');
+        toast.error(response.message || 'Error al asignar roles');
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Error al asignar rol');
+      toast.error(error instanceof Error ? error.message : 'Error al asignar roles');
     }
+  };
+
+  const toggleUserRole = (roleId: number) => {
+    setSelectedRoleIds((prev) =>
+      prev.includes(roleId) ? prev.filter((id) => id !== roleId) : [...prev, roleId]
+    );
   };
 
   const handleOpenPermissionDialog = (permission?: PermissionResponse) => {
@@ -1220,92 +1220,12 @@ export function Usuarios() {
       </Tabs>
 
       {/* Dialog para crear/editar rol */}
-      <Dialog open={isRoleDialogOpen} onOpenChange={setIsRoleDialogOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>
-              {editingRole ? 'Editar Rol' : 'Nuevo Rol'}
-            </DialogTitle>
-            <DialogDescription>
-              {editingRole 
-                ? 'Modifica los campos del rol'
-                : 'Crea un nuevo rol con permisos asociados'}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="roleName">Nombre del Rol *</Label>
-              <Input
-                id="roleName"
-                value={roleForm.name}
-                onChange={(e) => setRoleForm({ ...roleForm, name: e.target.value })}
-                placeholder="ej: ADMIN, USUARIO"
-                disabled={!!editingRole}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Permisos</Label>
-              <ScrollArea className="h-[200px] border rounded-md p-4">
-                {availablePermissions.length === 0 ? (
-                  <div className="text-sm text-[#6b6a6e] text-center py-4">
-                    Cargando permisos...
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {availablePermissions.map((permission) => (
-                      <div key={permission.id} className="flex items-center space-x-2">
-                        <input
-                          type="checkbox"
-                          id={`permission-${permission.id}`}
-                          checked={roleForm.permissionIds.includes(permission.id)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setRoleForm({
-                                ...roleForm,
-                                permissionIds: [...roleForm.permissionIds, permission.id],
-                              });
-                            } else {
-                              setRoleForm({
-                                ...roleForm,
-                                permissionIds: roleForm.permissionIds.filter(id => id !== permission.id),
-                              });
-                            }
-                          }}
-                          className="rounded"
-                        />
-                        <label
-                          htmlFor={`permission-${permission.id}`}
-                          className="text-sm cursor-pointer"
-                        >
-                          {permission.name}
-                        </label>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </ScrollArea>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsRoleDialogOpen(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleSaveRole} className="bg-[#55c3c5] hover:bg-[#4ab3b5]">
-              {editingRole ? 'Actualizar' : 'Crear'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Dialog para crear/editar rol */}
       <Dialog open={isRoleDialogOpen} onOpenChange={(open) => {
         setIsRoleDialogOpen(open);
         if (!open) {
           setPermissionSearch('');
           setEditingRole(null);
+          setRoleForm({ name: '', permissionIds: [] });
         }
       }}>
         <DialogContent className="max-w-6xl max-h-[90vh]">
@@ -1341,6 +1261,7 @@ export function Usuarios() {
               setIsRoleDialogOpen(false);
               setPermissionSearch('');
               setEditingRole(null);
+              setRoleForm({ name: '', permissionIds: [] });
             }}>
               Cancelar
             </Button>
@@ -1351,35 +1272,53 @@ export function Usuarios() {
         </DialogContent>
       </Dialog>
 
-      {/* Dialog para asignar rol a usuario */}
+      {/* Dialog para asignar roles a usuario */}
       <Dialog open={isUserRoleDialogOpen} onOpenChange={setIsUserRoleDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Asignar Rol a Usuario</DialogTitle>
+            <DialogTitle>Asignar roles a usuario</DialogTitle>
             <DialogDescription>
-              Asigna un rol al usuario {selectedUser?.name} {selectedUser?.lastName}
+              Selecciona uno o más roles para {selectedUser?.name} {selectedUser?.lastName}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="roleType">Rol *</Label>
-              <Select 
-                value={selectedRoleId?.toString() || ''} 
-                onValueChange={(value) => setSelectedRoleId(parseInt(value))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecciona un rol" />
-                </SelectTrigger>
-                <SelectContent>
+            <Label>Roles</Label>
+            {roles.length === 0 ? (
+              <p className="text-sm text-[#6b6a6e]">Cargando roles...</p>
+            ) : (
+              <ScrollArea className="h-[240px] border rounded-md p-3">
+                <div className="space-y-2">
                   {roles.map((role) => (
-                    <SelectItem key={role.id} value={role.id.toString()}>
-                      {role.name}
-                    </SelectItem>
+                    <div
+                      key={role.id}
+                      className="flex items-center space-x-2 cursor-pointer rounded-lg p-2 hover:bg-[#55c3c5]/10"
+                      onClick={() => toggleUserRole(role.id)}
+                    >
+                      <input
+                        type="checkbox"
+                        id={`user-role-${role.id}`}
+                        checked={selectedRoleIds.includes(role.id)}
+                        onChange={() => toggleUserRole(role.id)}
+                        className="rounded"
+                      />
+                      <label
+                        htmlFor={`user-role-${role.id}`}
+                        className="text-sm font-medium cursor-pointer flex-1"
+                      >
+                        {role.name}
+                      </label>
+                    </div>
                   ))}
-                </SelectContent>
-              </Select>
-            </div>
+                </div>
+              </ScrollArea>
+            )}
+            {selectedRoleIds.length > 0 && (
+              <p className="text-xs text-[#6b6a6e]">
+                {selectedRoleIds.length} rol{selectedRoleIds.length !== 1 ? 'es' : ''} seleccionado
+                {selectedRoleIds.length !== 1 ? 's' : ''}
+              </p>
+            )}
           </div>
 
           <DialogFooter>
@@ -1387,7 +1326,7 @@ export function Usuarios() {
               Cancelar
             </Button>
             <Button onClick={handleSaveUserRole} className="bg-[#55c3c5] hover:bg-[#4ab3b5]">
-              Asignar
+              Asignar roles
             </Button>
           </DialogFooter>
         </DialogContent>
