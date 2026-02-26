@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { ScrollArea } from '../ui/scroll-area';
+import { TablePagination } from '../ui/table-pagination';
 import { Input } from '../ui/input';
 import { Search, UserCheck, FileText, RefreshCw, Users, ArrowLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
@@ -241,30 +242,13 @@ export function Migracion() {
                 </ScrollArea>
 
                 {totalPages > 1 && (
-                  <div className="flex items-center justify-between mt-5 pt-5 border-t border-[#e5e5e6]">
-                    <div className="text-sm text-[#6b6a6e]">
-                      Página {currentPage + 1} de {totalPages}
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => load(currentPage - 1, search)}
-                        disabled={currentPage === 0 || loading}
-                        className="border-[#e5e5e6] text-[#3b3a3e] hover:bg-[#f5f5f6]"
-                      >
-                        Anterior
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => load(currentPage + 1, search)}
-                        disabled={currentPage >= totalPages - 1 || loading}
-                        className="border-[#e5e5e6] text-[#3b3a3e] hover:bg-[#f5f5f6]"
-                      >
-                        Siguiente
-                      </Button>
-                    </div>
+                  <div className="mt-5 pt-5 border-t border-[#e5e5e6]">
+                    <TablePagination
+                      currentPage={currentPage}
+                      totalPages={totalPages}
+                      onPageChange={(p) => load(p, search)}
+                      disabled={loading}
+                    />
                   </div>
                 )}
               </>

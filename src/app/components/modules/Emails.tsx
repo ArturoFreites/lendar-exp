@@ -12,6 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { ScrollArea } from '../ui/scroll-area';
+import { TablePagination } from '../ui/table-pagination';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
@@ -635,16 +636,13 @@ export function Emails() {
                     </div>
                   </ScrollArea>
                   {totalPages > 1 && (
-                    <div className="flex items-center justify-between mt-4 pt-4 border-t">
-                      <span className="text-sm text-[#6b6a6e]">Página {currentPage + 1} de {totalPages}</span>
-                      <div className="flex gap-2">
-                        <Button variant="outline" size="sm" onClick={() => loadEmailConfigs(currentPage - 1, configSearch)} disabled={currentPage === 0 || configLoading}>
-                          Anterior
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={() => loadEmailConfigs(currentPage + 1, configSearch)} disabled={currentPage >= totalPages - 1 || configLoading}>
-                          Siguiente
-                        </Button>
-                      </div>
+                    <div className="mt-4 pt-4 border-t">
+                      <TablePagination
+                        currentPage={currentPage}
+                        totalPages={totalPages}
+                        onPageChange={(p) => loadEmailConfigs(p, configSearch)}
+                        disabled={configLoading}
+                      />
                     </div>
                   )}
                 </>

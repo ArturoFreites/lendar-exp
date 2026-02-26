@@ -19,6 +19,7 @@ import type {
   UserResponse,
   MigratedPersonResponse,
   UserRoleUpdaterRequest,
+  UserCreateRequest,
   UserUpdateRequest,
   UserFcmTokenRequest,
   UserSessionResponse,
@@ -348,6 +349,10 @@ export class HttpApiAdapter implements ApiRepository {
     const response = await this.request<BackendPaginationResponse<UserResponse>>(endpoint, { method: 'GET' });
     if (response.data) return { ...response, data: this.normalizePaginationResponse(response.data) };
     return { ...response, data: null };
+  }
+
+  async createUser(request: UserCreateRequest): Promise<QrResponse<null>> {
+    return this.request<null>('/backoffice/api/auth/signup', { method: 'POST', body: JSON.stringify(request) });
   }
 
   async getMigratedPersons(params?: Record<string, string>): Promise<QrResponse<PaginationResponse<MigratedPersonResponse>>> {

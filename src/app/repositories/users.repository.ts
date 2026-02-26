@@ -4,6 +4,7 @@ import type {
   UserProfileResponse,
   UserResponse,
   UserRoleUpdaterRequest,
+  UserCreateRequest,
   UserUpdateRequest,
   UserSessionResponse,
   RoleResponse,
@@ -16,6 +17,7 @@ import type {
 export interface UsersRepository {
   getUserProfile(userId: number): Promise<QrResponse<UserProfileResponse>>;
   getUsers(params?: Record<string, string>): Promise<QrResponse<PaginationResponse<UserResponse>>>;
+  createUser(request: UserCreateRequest): Promise<QrResponse<null>>;
   updateUserRole(request: UserRoleUpdaterRequest): Promise<QrResponse<null>>;
   updateUser(request: UserUpdateRequest): Promise<QrResponse<null>>;
   registerFcmToken(request: { fcmToken: string; platform?: string; deviceLabel?: string }): Promise<QrResponse<null>>;

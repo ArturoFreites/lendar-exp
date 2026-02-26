@@ -15,6 +15,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { ScrollArea } from '../ui/scroll-area';
+import { TablePagination } from '../ui/table-pagination';
 import {
   Dialog,
   DialogContent,
@@ -412,28 +413,13 @@ export function Franquicias() {
                 </div>
               </ScrollArea>
               {totalPages > 1 && (
-                <div className="flex items-center justify-between mt-4 pt-4 border-t">
-                  <div className="text-sm text-[#6b6a6e]">
-                    Página {page + 1} de {totalPages}
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => loadList(page - 1, searchName)}
-                      disabled={page === 0 || loading}
-                    >
-                      Anterior
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => loadList(page + 1, searchName)}
-                      disabled={page >= totalPages - 1 || loading}
-                    >
-                      Siguiente
-                    </Button>
-                  </div>
+                <div className="mt-4 pt-4 border-t">
+                  <TablePagination
+                    currentPage={page}
+                    totalPages={totalPages}
+                    onPageChange={(p) => loadList(p, searchName)}
+                    disabled={loading}
+                  />
                 </div>
               )}
             </>

@@ -15,6 +15,7 @@ import {
   createCreatePermissionUseCase,
   createUpdatePermissionUseCase,
   createDeletePermissionUseCase,
+  createCreateUserUseCase,
   createUpdateUserRoleUseCase,
 } from '../usecases/users.usecases';
 
@@ -130,6 +131,14 @@ export function useUsers() {
     [apiService]
   );
 
+  const createUser = useCallback(
+    async (request: { name: string; lastName: string; email: string; password: string; dni: string }) => {
+      if (!apiService) return null;
+      return createCreateUserUseCase(apiService).execute(request);
+    },
+    [apiService]
+  );
+
   const updateUserRole = useCallback(
     async (request: { userId: number; roleIds: number[] }) => {
       if (!apiService) return null;
@@ -141,6 +150,7 @@ export function useUsers() {
   return {
     getUserProfile,
     getUsers,
+    createUser,
     getRoles,
     getPermissions,
     getUserSessions,

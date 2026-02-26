@@ -16,6 +16,7 @@ export {
   type PermissionResponse,
   type RoleRequest,
   type UserRoleUpdaterRequest,
+  type UserCreateRequest,
   type PermissionRequest,
   type UserUpdateRequest,
   type ActionResponse,

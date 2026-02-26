@@ -112,6 +112,14 @@ export function createDeletePermissionUseCase(repo: UsersRepository) {
   };
 }
 
+export function createCreateUserUseCase(repo: UsersRepository) {
+  return {
+    async execute(request: Parameters<UsersRepository['createUser']>[0]) {
+      return repo.createUser(request);
+    },
+  };
+}
+
 export function createUpdateUserRoleUseCase(repo: UsersRepository) {
   return {
     async execute(request: Parameters<UsersRepository['updateUserRole']>[0]) {

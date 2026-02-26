@@ -179,6 +179,14 @@ export interface UserRoleUpdaterRequest {
   roleIds: number[];
 }
 
+export interface UserCreateRequest {
+  name: string;
+  lastName: string;
+  email: string;
+  password: string;
+  dni: string;
+}
+
 export interface PermissionRequest {
   name: string;
   description?: string;

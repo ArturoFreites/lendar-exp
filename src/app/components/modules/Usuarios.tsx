@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useUsers } from '../../hooks/use-users';
 import {
   UserResponse,
@@ -15,6 +15,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { ScrollArea } from '../ui/scroll-area';
+import { TablePagination } from '../ui/table-pagination';
 import { Input } from '../ui/input';
 import { Textarea } from '../ui/textarea';
 import { Label } from '../ui/label';
@@ -55,7 +56,11 @@ import {
   XCircle,
   Trash2,
   CheckSquare,
-  Square
+  Square,
+  KeyRound,
+  Eye,
+  EyeOff,
+  Copy
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -85,7 +90,7 @@ export function Usuarios() {
   const [rolesCurrentPage, setRolesCurrentPage] = useState(0);
   const [rolesTotalPages, setRolesTotalPages] = useState(0);
   const [rolesTotalElements, setRolesTotalElements] = useState(0);
-  const [isRoleDialogOpen, setIsRoleDialogOpen] = useState(false);
+  const [showCreateRoleForm, setShowCreateRoleForm] = useState(false);
   const [editingRole, setEditingRole] = useState<RoleResponse | null>(null);
   const [roleForm, setRoleForm] = useState<RoleRequest>({
     name: '',
@@ -111,6 +116,20 @@ export function Usuarios() {
   const [isUserRoleDialogOpen, setIsUserRoleDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserResponse | null>(null);
   const [selectedRoleIds, setSelectedRoleIds] = useState<number[]>([]);
+
+  // Create user (full-screen form) state
+  const [showCreateUserForm, setShowCreateUserForm] = useState(false);
+  const [showCreateUserPassword, setShowCreateUserPassword] = useState(false);
+  const [createUserSubmitting, setCreateUserSubmitting] = useState(false);
+  const [createUserForm, setCreateUserForm] = useState({
+    name: '',
+    lastName: '',
+    email: '',
+    password: '',
+    dni: '',
+    roleIds: [] as number[],
+  });
+  const [createdUserCredentials, setCreatedUserCredentials] = useState<{ email: string; password: string } | null>(null);
 
   const loadSessions = async () => {
     if (!usersApi.hasApi) {
@@ -188,9 +207,10 @@ export function Usuarios() {
       };
       
       if (search && search.trim()) {
-        // Usar el operador 'contains' para búsqueda "contiene" en lugar de igualdad exacta
-        // El formato es: contains=email:valor
-        params.contains = `email:${search.trim()}`;
+        const needle = search.trim();
+        // Usar el operador 'orContains' para búsqueda "contiene" en múltiples campos
+        // Formato: orContains=field1,field2,...:valor
+        params.orContains = `name,lastName,email:${needle}`;
       }
 
       const response = await usersApi.getUsers(params);
@@ -293,10 +313,6 @@ export function Usuarios() {
     return null;
   };
 
-  const handleUserSearch = () => {
-    setUsersCurrentPage(0);
-    loadUsers(0, userSearch);
-  };
 
   const handleOpenRoleDialog = async (role?: RoleResponse) => {
     // Cargar permisos disponibles si no están cargados
@@ -329,7 +345,7 @@ export function Usuarios() {
         permissionIds: [],
       });
     }
-    setIsRoleDialogOpen(true);
+    setShowCreateRoleForm(true);
   };
 
   const handleSaveRole = async () => {
@@ -345,7 +361,7 @@ export function Usuarios() {
         const response = await usersApi.updateRole(editingRole.id, roleForm);
         if (response.code === 200) {
           toast.success('Rol actualizado correctamente');
-          setIsRoleDialogOpen(false);
+          setShowCreateRoleForm(false);
           await loadRoles(rolesCurrentPage);
         } else {
           toast.error(response.message || 'Error al actualizar rol');
@@ -354,7 +370,7 @@ export function Usuarios() {
         const response = await usersApi.createRole(roleForm);
         if (response.code === 200) {
           toast.success('Rol creado correctamente');
-          setIsRoleDialogOpen(false);
+          setShowCreateRoleForm(false);
           await loadRoles(0);
         } else {
           toast.error(response.message || 'Error al crear rol');
@@ -425,6 +441,102 @@ export function Usuarios() {
     setSelectedRoleIds((prev) =>
       prev.includes(roleId) ? prev.filter((id) => id !== roleId) : [...prev, roleId]
     );
+  };
+
+  const handleOpenCreateUserForm = async () => {
+    setCreateUserForm({
+      name: '',
+      lastName: '',
+      email: '',
+      password: '',
+      dni: '',
+      roleIds: [],
+    });
+    setShowCreateUserPassword(false);
+    if (roles.length === 0 && usersApi.hasApi) {
+      await loadRoles(0);
+    }
+    setShowCreateUserForm(true);
+  };
+
+  const toggleCreateUserRole = (roleId: number) => {
+    setCreateUserForm((prev) => ({
+      ...prev,
+      roleIds: prev.roleIds.includes(roleId)
+        ? prev.roleIds.filter((id) => id !== roleId)
+        : [...prev.roleIds, roleId],
+    }));
+  };
+
+  const generateSecurePassword = useCallback(() => {
+    const length = 14;
+    const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    const lower = 'abcdefghjkmnpqrstuvwxyz';
+    const numbers = '23456789';
+    const symbols = '!@#$%&*';
+    const all = upper + lower + numbers + symbols;
+    const bytes = new Uint8Array(length);
+    if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+      crypto.getRandomValues(bytes);
+    }
+    const chars = [
+      upper[bytes[0] % upper.length],
+      lower[bytes[1] % lower.length],
+      numbers[bytes[2] % numbers.length],
+      symbols[bytes[3] % symbols.length],
+      ...Array.from(bytes.slice(4), (b) => all[b % all.length]),
+    ];
+    for (let i = chars.length - 1; i > 0; i--) {
+      const j = bytes[i % length] % (i + 1);
+      [chars[i], chars[j]] = [chars[j], chars[i]];
+    }
+    return chars.join('');
+  }, []);
+
+  const handleCreateUser = async () => {
+    if (!usersApi.hasApi) {
+      toast.error('No hay servicio de API disponible');
+      return;
+    }
+    const { name, lastName, email, password, dni, roleIds } = createUserForm;
+    if (!name.trim() || !lastName.trim() || !email.trim() || !password.trim() || !dni.trim()) {
+      toast.error('Nombre, apellido, email, contraseña y DNI son obligatorios');
+      return;
+    }
+    if (password.length < 6) {
+      toast.error('La contraseña debe tener al menos 6 caracteres');
+      return;
+    }
+    setCreateUserSubmitting(true);
+    try {
+      const createResponse = await usersApi.createUser({ name, lastName, email, password, dni });
+      if (createResponse.code !== 200) {
+        toast.error(createResponse.message || 'Error al crear usuario');
+        return;
+      }
+      toast.success('Usuario creado correctamente');
+      const usersResponse = await usersApi.getUsers({
+        page: '0',
+        size: '1',
+        contains: `email:${email.trim()}`,
+      });
+      const newUser = usersResponse.data?.content?.[0];
+      if (newUser && roleIds.length > 0) {
+        const roleResponse = await usersApi.updateUserRole({ userId: newUser.id, roleIds });
+        if (roleResponse.code === 200) {
+          toast.success('Roles asignados correctamente');
+        } else {
+          toast.warning('Usuario creado pero no se pudieron asignar los roles');
+        }
+      }
+      setShowCreateUserForm(false);
+      setCreatedUserCredentials({ email: email.trim(), password });
+      await loadUsers(0, userSearch);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Error al crear usuario');
+    } finally {
+      setCreateUserSubmitting(false);
+    }
   };
 
   const handleOpenPermissionDialog = (permission?: PermissionResponse) => {
@@ -656,18 +768,28 @@ export function Usuarios() {
   useEffect(() => {
     if (!usersApi.hasApi) return;
     
-    if (activeTab === 'usuarios') {
-      // Solo cargar si no hay búsqueda activa, para evitar sobreescribir resultados
-      if (!userSearch) {
-        loadUsers(0);
-      }
-    } else if (activeTab === 'roles') {
+    if (activeTab === 'roles') {
       loadRoles(0);
     } else if (activeTab === 'permisos') {
       loadPermissions(0);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, usersApi.hasApi]);
+
+  useEffect(() => {
+    if (!usersApi.hasApi) return;
+    if (activeTab !== 'usuarios') return;
+
+    const trimmed = userSearch.trim();
+
+    const timeoutId = window.setTimeout(() => {
+      setUsersCurrentPage(0);
+      loadUsers(0, trimmed || undefined);
+    }, 400);
+
+    return () => window.clearTimeout(timeoutId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userSearch, activeTab]);
 
   return (
     <div className="space-y-6 p-8">
@@ -862,6 +984,168 @@ export function Usuarios() {
         </TabsContent>
 
         <TabsContent value="usuarios">
+          {showCreateUserForm ? (
+            <Card className="flex flex-col min-h-[calc(100vh-12rem)]">
+              <CardHeader className="border-b">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <UserIcon className="h-5 w-5" />
+                      Crear usuario
+                    </CardTitle>
+                    <CardDescription>
+                      Completa los datos y asigna roles al nuevo usuario
+                    </CardDescription>
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowCreateUserForm(false)}
+                    className="gap-2"
+                  >
+                    Volver
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="flex-1 p-8">
+                <div className="max-w-2xl mx-auto space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <Label htmlFor="createUserName">Nombre *</Label>
+                      <Input
+                        id="createUserName"
+                        value={createUserForm.name}
+                        onChange={(e) => setCreateUserForm((f) => ({ ...f, name: e.target.value }))}
+                        placeholder="Nombre"
+                        className="text-base bg-white border-gray-300 text-[#3b3a3e] placeholder:text-[#6b6a6e] focus-visible:border-[#55c3c5] focus-visible:ring-[#55c3c5]/20 shadow-sm"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="createUserLastName">Apellido *</Label>
+                      <Input
+                        id="createUserLastName"
+                        value={createUserForm.lastName}
+                        onChange={(e) => setCreateUserForm((f) => ({ ...f, lastName: e.target.value }))}
+                        placeholder="Apellido"
+                        className="text-base bg-white border-gray-300 text-[#3b3a3e] placeholder:text-[#6b6a6e] focus-visible:border-[#55c3c5] focus-visible:ring-[#55c3c5]/20 shadow-sm"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="createUserEmail">Email *</Label>
+                    <Input
+                      id="createUserEmail"
+                      type="email"
+                      value={createUserForm.email}
+                      onChange={(e) => setCreateUserForm((f) => ({ ...f, email: e.target.value }))}
+                      placeholder="correo@ejemplo.com"
+                      className="text-base bg-white border-gray-300 text-[#3b3a3e] placeholder:text-[#6b6a6e] focus-visible:border-[#55c3c5] focus-visible:ring-[#55c3c5]/20 shadow-sm"
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <Label htmlFor="createUserPassword">Contraseña *</Label>
+                      <div className="flex gap-2">
+                        <div className="relative flex-1 flex">
+                          <Input
+                            id="createUserPassword"
+                            type={showCreateUserPassword ? 'text' : 'password'}
+                            value={createUserForm.password}
+                            onChange={(e) => setCreateUserForm((f) => ({ ...f, password: e.target.value }))}
+                            placeholder="Mínimo 6 caracteres"
+                            className="text-base bg-white border-gray-300 text-[#3b3a3e] placeholder:text-[#6b6a6e] focus-visible:border-[#55c3c5] focus-visible:ring-[#55c3c5]/20 shadow-sm flex-1 pr-10"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="absolute right-0 top-0 h-full px-3 text-[#6b6a6e] hover:text-[#3b3a3e] hover:bg-transparent"
+                            onClick={() => setShowCreateUserPassword((v) => !v)}
+                            title={showCreateUserPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
+                          >
+                            {showCreateUserPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </Button>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => setCreateUserForm((f) => ({ ...f, password: generateSecurePassword() }))}
+                          className="shrink-0 gap-2 border-[#55c3c5]/50 hover:bg-[#55c3c5]/10 hover:border-[#55c3c5]"
+                          title="Generar contraseña segura"
+                        >
+                          <KeyRound className="h-4 w-4" />
+                          Generar
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="createUserDni">DNI *</Label>
+                      <Input
+                        id="createUserDni"
+                        value={createUserForm.dni}
+                        onChange={(e) => setCreateUserForm((f) => ({ ...f, dni: e.target.value }))}
+                        placeholder="DNI"
+                        className="text-base bg-white border-gray-300 text-[#3b3a3e] placeholder:text-[#6b6a6e] focus-visible:border-[#55c3c5] focus-visible:ring-[#55c3c5]/20 shadow-sm"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <Label>Roles</Label>
+                    {roles.length === 0 ? (
+                      <p className="text-sm text-[#6b6a6e]">Cargando roles...</p>
+                    ) : (
+                      <ScrollArea className="h-[200px] border border-gray-300 rounded-md p-3 bg-white shadow-sm">
+                        <div className="space-y-2">
+                          {roles.map((role) => (
+                            <div
+                              key={role.id}
+                              className="flex items-center space-x-2 cursor-pointer rounded-lg p-2 hover:bg-[#55c3c5]/10"
+                              onClick={() => toggleCreateUserRole(role.id)}
+                            >
+                              <input
+                                type="checkbox"
+                                id={`create-user-role-${role.id}`}
+                                checked={createUserForm.roleIds.includes(role.id)}
+                                onChange={() => toggleCreateUserRole(role.id)}
+                                className="rounded"
+                              />
+                              <label
+                                htmlFor={`create-user-role-${role.id}`}
+                                className="text-sm font-medium cursor-pointer flex-1 text-[#3b3a3e]"
+                              >
+                                {role.name}
+                              </label>
+                            </div>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    )}
+                    {createUserForm.roleIds.length > 0 && (
+                      <p className="text-xs text-[#6b6a6e]">
+                        {createUserForm.roleIds.length} rol{createUserForm.roleIds.length !== 1 ? 'es' : ''} seleccionado
+                        {createUserForm.roleIds.length !== 1 ? 's' : ''}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex gap-3 pt-4">
+                    <Button
+                      variant="outline"
+                      onClick={() => setShowCreateUserForm(false)}
+                      disabled={createUserSubmitting}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      onClick={handleCreateUser}
+                      disabled={createUserSubmitting}
+                      className="gap-2 bg-[#55c3c5] hover:bg-[#4ab3b5]"
+                    >
+                      {createUserSubmitting ? 'Creando...' : 'Crear usuario'}
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -874,6 +1158,10 @@ export function Usuarios() {
                     {usersTotalElements} usuario{usersTotalElements !== 1 ? 's' : ''} encontrado{usersTotalElements !== 1 ? 's' : ''}
                   </CardDescription>
                 </div>
+                <Button onClick={handleOpenCreateUserForm} className="gap-2 bg-[#55c3c5] hover:bg-[#4ab3b5]">
+                  <Plus className="h-4 w-4" />
+                  Crear usuario
+                </Button>
               </div>
             </CardHeader>
             <CardContent>
@@ -882,23 +1170,15 @@ export function Usuarios() {
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-[#6b6a6e] pointer-events-none" />
                   <Input
                     type="text"
-                    placeholder="Buscar por email..."
+                    placeholder="Buscar por nombre, apellido o email..."
                     value={userSearch}
                     onChange={(e) => setUserSearch(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleUserSearch()}
                     className="pl-9"
                   />
                 </div>
-                <Button onClick={handleUserSearch} variant="outline" disabled={usersLoading}>
-                  Buscar
-                </Button>
                 {userSearch && (
                   <Button 
-                    onClick={() => { 
-                      setUserSearch(''); 
-                      setUsersCurrentPage(0);
-                      loadUsers(0); 
-                    }} 
+                    onClick={() => setUserSearch('')} 
                     variant="outline"
                     disabled={usersLoading}
                   >
@@ -963,37 +1243,87 @@ export function Usuarios() {
                   </ScrollArea>
                   
                   {usersTotalPages > 1 && (
-                    <div className="flex items-center justify-between mt-4 pt-4 border-t">
-                      <div className="text-sm text-[#6b6a6e]">
-                        Página {usersCurrentPage + 1} de {usersTotalPages}
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => loadUsers(usersCurrentPage - 1, userSearch)}
-                          disabled={usersCurrentPage === 0 || usersLoading}
-                        >
-                          Anterior
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => loadUsers(usersCurrentPage + 1, userSearch)}
-                          disabled={usersCurrentPage >= usersTotalPages - 1 || usersLoading}
-                        >
-                          Siguiente
-                        </Button>
-                      </div>
+                    <div className="mt-4 pt-4 border-t">
+                      <TablePagination
+                        currentPage={usersCurrentPage}
+                        totalPages={usersTotalPages}
+                        onPageChange={(p) => loadUsers(p, userSearch)}
+                        disabled={usersLoading}
+                      />
                     </div>
                   )}
                 </>
               )}
             </CardContent>
           </Card>
+          )}
         </TabsContent>
 
         <TabsContent value="roles">
+          {showCreateRoleForm ? (
+            <Card className="flex flex-col min-h-[calc(100vh-12rem)]">
+              <CardHeader className="border-b">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Shield className="h-5 w-5" />
+                      {editingRole ? 'Editar rol' : 'Crear rol'}
+                    </CardTitle>
+                    <CardDescription>
+                      {editingRole
+                        ? 'Modifica los campos del rol y sus permisos asociados'
+                        : 'Crea un nuevo rol con permisos asociados'}
+                    </CardDescription>
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setShowCreateRoleForm(false);
+                      setPermissionSearch('');
+                      setEditingRole(null);
+                      setRoleForm({ name: '', permissionIds: [] });
+                    }}
+                    className="gap-2"
+                  >
+                    Volver
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="flex-1 p-8">
+                <div className="max-w-5xl mx-auto space-y-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="roleName">Nombre del Rol *</Label>
+                    <Input
+                      id="roleName"
+                      value={roleForm.name}
+                      onChange={(e) => setRoleForm({ ...roleForm, name: e.target.value })}
+                      placeholder="ej: ADMIN, USUARIO"
+                      disabled={!!editingRole}
+                      className="text-base bg-white border-gray-300 text-[#3b3a3e] placeholder:text-[#6b6a6e] focus-visible:border-[#55c3c5] focus-visible:ring-[#55c3c5]/20 shadow-sm"
+                    />
+                  </div>
+
+                  {renderPermissionsSelector()}
+                </div>
+              </CardContent>
+              <div className="border-t px-8 py-4 flex gap-3 justify-end">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowCreateRoleForm(false);
+                    setPermissionSearch('');
+                    setEditingRole(null);
+                    setRoleForm({ name: '', permissionIds: [] });
+                  }}
+                >
+                  Cancelar
+                </Button>
+                <Button onClick={handleSaveRole} className="gap-2 bg-[#55c3c5] hover:bg-[#4ab3b5]">
+                  {editingRole ? 'Actualizar' : 'Crear'}
+                </Button>
+              </div>
+            </Card>
+          ) : (
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -1088,38 +1418,20 @@ export function Usuarios() {
                   </div>
                   
                   {rolesTotalPages > 1 && (
-                    <div className="flex items-center justify-between pt-4 border-t">
-                      <div className="text-sm text-[#6b6a6e]">
-                        Página {rolesCurrentPage + 1} de {rolesTotalPages}
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => loadRoles(rolesCurrentPage - 1)}
-                          disabled={rolesCurrentPage === 0 || rolesLoading}
-                          className="gap-2"
-                        >
-                          <RefreshCw className={`h-3.5 w-3.5 ${rolesCurrentPage === 0 ? 'opacity-50' : ''}`} />
-                          Anterior
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => loadRoles(rolesCurrentPage + 1)}
-                          disabled={rolesCurrentPage >= rolesTotalPages - 1 || rolesLoading}
-                          className="gap-2"
-                        >
-                          Siguiente
-                          <RefreshCw className={`h-3.5 w-3.5 rotate-180 ${rolesCurrentPage >= rolesTotalPages - 1 ? 'opacity-50' : ''}`} />
-                        </Button>
-                      </div>
+                    <div className="pt-4 border-t">
+                      <TablePagination
+                        currentPage={rolesCurrentPage}
+                        totalPages={rolesTotalPages}
+                        onPageChange={loadRoles}
+                        disabled={rolesLoading}
+                      />
                     </div>
                   )}
                 </>
               )}
             </CardContent>
           </Card>
+          )}
         </TabsContent>
 
         <TabsContent value="permisos">
@@ -1188,28 +1500,13 @@ export function Usuarios() {
                   </ScrollArea>
                   
                   {permissionsTotalPages > 1 && (
-                    <div className="flex items-center justify-between mt-4 pt-4 border-t">
-                      <div className="text-sm text-[#6b6a6e]">
-                        Página {permissionsCurrentPage + 1} de {permissionsTotalPages}
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => loadPermissions(permissionsCurrentPage - 1)}
-                          disabled={permissionsCurrentPage === 0 || permissionsLoading}
-                        >
-                          Anterior
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => loadPermissions(permissionsCurrentPage + 1)}
-                          disabled={permissionsCurrentPage >= permissionsTotalPages - 1 || permissionsLoading}
-                        >
-                          Siguiente
-                        </Button>
-                      </div>
+                    <div className="mt-4 pt-4 border-t">
+                      <TablePagination
+                        currentPage={permissionsCurrentPage}
+                        totalPages={permissionsTotalPages}
+                        onPageChange={loadPermissions}
+                        disabled={permissionsLoading}
+                      />
                     </div>
                   )}
                 </>
@@ -1218,59 +1515,6 @@ export function Usuarios() {
           </Card>
         </TabsContent>
       </Tabs>
-
-      {/* Dialog para crear/editar rol */}
-      <Dialog open={isRoleDialogOpen} onOpenChange={(open) => {
-        setIsRoleDialogOpen(open);
-        if (!open) {
-          setPermissionSearch('');
-          setEditingRole(null);
-          setRoleForm({ name: '', permissionIds: [] });
-        }
-      }}>
-        <DialogContent className="max-w-6xl max-h-[90vh]">
-          <DialogHeader>
-            <DialogTitle>
-              {editingRole ? 'Editar Rol' : 'Nuevo Rol'}
-            </DialogTitle>
-            <DialogDescription>
-              {editingRole 
-                ? 'Modifica los campos del rol y sus permisos asociados'
-                : 'Crea un nuevo rol con permisos asociados'}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="roleName">Nombre del Rol *</Label>
-              <Input
-                id="roleName"
-                value={roleForm.name}
-                onChange={(e) => setRoleForm({ ...roleForm, name: e.target.value })}
-                placeholder="ej: ADMIN, USUARIO"
-                disabled={!!editingRole}
-                className="text-base"
-              />
-            </div>
-
-            {renderPermissionsSelector()}
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => {
-              setIsRoleDialogOpen(false);
-              setPermissionSearch('');
-              setEditingRole(null);
-              setRoleForm({ name: '', permissionIds: [] });
-            }}>
-              Cancelar
-            </Button>
-            <Button onClick={handleSaveRole} className="bg-[#55c3c5] hover:bg-[#4ab3b5]">
-              {editingRole ? 'Actualizar' : 'Crear'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Dialog para asignar roles a usuario */}
       <Dialog open={isUserRoleDialogOpen} onOpenChange={setIsUserRoleDialogOpen}>
@@ -1374,6 +1618,77 @@ export function Usuarios() {
             </Button>
             <Button onClick={handleSavePermission} className="bg-[#55c3c5] hover:bg-[#4ab3b5]">
               {editingPermission ? 'Actualizar' : 'Crear'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal con credenciales del usuario recién creado */}
+      <Dialog open={!!createdUserCredentials} onOpenChange={(open) => !open && setCreatedUserCredentials(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5 text-[#55c3c5]" />
+              Usuario creado
+            </DialogTitle>
+            <DialogDescription>
+              Guarda estas credenciales. La contraseña no se mostrará de nuevo.
+            </DialogDescription>
+          </DialogHeader>
+          {createdUserCredentials && (
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label className="text-[#6b6a6e]">Email</Label>
+                <div className="flex gap-2">
+                  <Input
+                    readOnly
+                    value={createdUserCredentials.email}
+                    className="flex-1 bg-[#f8f9fa] border-gray-300 text-[#3b3a3e] font-mono text-sm"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="shrink-0 border-[#55c3c5]/50 hover:bg-[#55c3c5]/10 hover:border-[#55c3c5]"
+                    onClick={async () => {
+                      await navigator.clipboard.writeText(createdUserCredentials.email);
+                      toast.success('Email copiado al portapapeles');
+                    }}
+                    title="Copiar email"
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[#6b6a6e]">Contraseña</Label>
+                <div className="flex gap-2">
+                  <Input
+                    readOnly
+                    type="text"
+                    value={createdUserCredentials.password}
+                    className="flex-1 bg-[#f8f9fa] border-gray-300 text-[#3b3a3e] font-mono text-sm"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="shrink-0 border-[#55c3c5]/50 hover:bg-[#55c3c5]/10 hover:border-[#55c3c5]"
+                    onClick={async () => {
+                      await navigator.clipboard.writeText(createdUserCredentials.password);
+                      toast.success('Contraseña copiada al portapapeles');
+                    }}
+                    title="Copiar contraseña"
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button onClick={() => setCreatedUserCredentials(null)} className="bg-[#55c3c5] hover:bg-[#4ab3b5]">
+              Cerrar
             </Button>
           </DialogFooter>
         </DialogContent>
