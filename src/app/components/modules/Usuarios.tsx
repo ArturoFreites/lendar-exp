@@ -8,6 +8,7 @@ import {
   UserProfileResponse,
   RoleRequest,
   UserRoleUpdaterRequest,
+  UserUpdateRequest,
   PermissionRequest,
   UserSessionResponse,
 } from '../../services/api';
@@ -40,6 +41,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '../ui/tooltip';
+import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
 import { 
   Users, 
   RefreshCw, 
@@ -60,7 +62,8 @@ import {
   KeyRound,
   Eye,
   EyeOff,
-  Copy
+  Copy,
+  AlertTriangle
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -112,10 +115,18 @@ export function Usuarios() {
     description: '',
   });
   
-  // User-Role assignment state
-  const [isUserRoleDialogOpen, setIsUserRoleDialogOpen] = useState(false);
+  // Edit user (full-screen) state
+  const [showEditUserForm, setShowEditUserForm] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserResponse | null>(null);
+  const [editUserForm, setEditUserForm] = useState<Pick<UserUpdateRequest, 'userId' | 'name' | 'lastName' | 'email'>>({
+    userId: 0,
+    name: '',
+    lastName: '',
+    email: '',
+  });
   const [selectedRoleIds, setSelectedRoleIds] = useState<number[]>([]);
+  const [editUserSubmitting, setEditUserSubmitting] = useState(false);
+  const [sendPasswordResetLoading, setSendPasswordResetLoading] = useState(false);
 
   // Create user (full-screen form) state
   const [showCreateUserForm, setShowCreateUserForm] = useState(false);
@@ -401,39 +412,90 @@ export function Usuarios() {
     }
   };
 
-  const handleOpenUserRoleDialog = async (user: UserResponse) => {
+  const handleOpenEditUserForm = async (user: UserResponse) => {
     if (roles.length === 0) {
       await loadRoles(0);
     }
     setSelectedUser(user);
+    setEditUserForm({
+      userId: user.id,
+      name: user.name,
+      lastName: user.lastName,
+      email: user.email,
+    });
     setSelectedRoleIds(user.roles?.map((r) => r.id) ?? []);
-    setIsUserRoleDialogOpen(true);
+    setShowEditUserForm(true);
   };
 
-  const handleSaveUserRole = async () => {
+  const handleSendPasswordReset = async () => {
+    const email = editUserForm.email?.trim();
+    if (!email) {
+      toast.error('El usuario debe tener email para enviar el enlace');
+      return;
+    }
+    if (!usersApi.hasApi) return;
+    setSendPasswordResetLoading(true);
+    try {
+      const response = await usersApi.sendPasswordReset(email);
+      if (response?.code === 200) {
+        toast.success('Se ha enviado el enlace para restablecer la contraseña al correo del usuario');
+      } else {
+        toast.error(response?.message || 'Error al enviar el enlace');
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Error al enviar el enlace');
+    } finally {
+      setSendPasswordResetLoading(false);
+    }
+  };
+
+  const handleSaveEditUser = async () => {
     if (!usersApi.hasApi || !selectedUser) return;
 
+    if (!editUserForm.name.trim()) {
+      toast.error('El nombre es obligatorio');
+      return;
+    }
+    if (!editUserForm.lastName.trim()) {
+      toast.error('El apellido es obligatorio');
+      return;
+    }
     if (selectedRoleIds.length === 0) {
       toast.error('Debes seleccionar al menos un rol');
       return;
     }
 
+    setEditUserSubmitting(true);
     try {
-      const request: UserRoleUpdaterRequest = {
+      const updatePayload: UserUpdateRequest = {
+        userId: editUserForm.userId,
+        name: editUserForm.name.trim(),
+        lastName: editUserForm.lastName.trim(),
+        email: editUserForm.email?.trim() || undefined,
+      };
+      const updateUserResponse = await usersApi.updateUser(updatePayload);
+      if (updateUserResponse && updateUserResponse.code !== 200) {
+        toast.error(updateUserResponse.message || 'Error al actualizar datos del usuario');
+        setEditUserSubmitting(false);
+        return;
+      }
+
+      const roleRequest: UserRoleUpdaterRequest = {
         userId: selectedUser.id,
         roleIds: selectedRoleIds,
       };
-
-      const response = await usersApi.updateUserRole(request);
-      if (response.code === 200) {
-        toast.success('Roles asignados correctamente');
-        setIsUserRoleDialogOpen(false);
+      const roleResponse = await usersApi.updateUserRole(roleRequest);
+      if (roleResponse?.code === 200) {
+        toast.success('Usuario actualizado correctamente');
+        setShowEditUserForm(false);
         await loadUsers(usersCurrentPage, userSearch);
       } else {
-        toast.error(response.message || 'Error al asignar roles');
+        toast.error(roleResponse?.message || 'Error al asignar roles');
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Error al asignar roles');
+      toast.error(error instanceof Error ? error.message : 'Error al guardar usuario');
+    } finally {
+      setEditUserSubmitting(false);
     }
   };
 
@@ -1145,6 +1207,136 @@ export function Usuarios() {
                 </div>
               </CardContent>
             </Card>
+          ) : showEditUserForm ? (
+            <Card className="flex flex-col min-h-[calc(100vh-12rem)]">
+              <CardHeader className="border-b">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Edit2 className="h-5 w-5" />
+                      Editar usuario
+                    </CardTitle>
+                    <CardDescription>
+                      Modifica los datos, roles y opciones de contraseña del usuario
+                    </CardDescription>
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowEditUserForm(false)}
+                    className="gap-2"
+                  >
+                    Volver
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="flex-1 p-8">
+                <div className="max-w-2xl mx-auto space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-user-name">Nombre *</Label>
+                      <Input
+                        id="edit-user-name"
+                        value={editUserForm.name}
+                        onChange={(e) => setEditUserForm((prev) => ({ ...prev, name: e.target.value }))}
+                        placeholder="Nombre"
+                        className="text-base bg-white border-gray-300 text-[#3b3a3e] placeholder:text-[#6b6a6e] focus-visible:border-[#55c3c5] focus-visible:ring-[#55c3c5]/20 shadow-sm"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-user-lastName">Apellido *</Label>
+                      <Input
+                        id="edit-user-lastName"
+                        value={editUserForm.lastName}
+                        onChange={(e) => setEditUserForm((prev) => ({ ...prev, lastName: e.target.value }))}
+                        placeholder="Apellido"
+                        className="text-base bg-white border-gray-300 text-[#3b3a3e] placeholder:text-[#6b6a6e] focus-visible:border-[#55c3c5] focus-visible:ring-[#55c3c5]/20 shadow-sm"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-user-email">Email</Label>
+                    <Input
+                      id="edit-user-email"
+                      type="email"
+                      value={editUserForm.email}
+                      onChange={(e) => setEditUserForm((prev) => ({ ...prev, email: e.target.value }))}
+                      placeholder="correo@ejemplo.com"
+                      className="text-base bg-white border-gray-300 text-[#3b3a3e] placeholder:text-[#6b6a6e] focus-visible:border-[#55c3c5] focus-visible:ring-[#55c3c5]/20 shadow-sm"
+                    />
+                  </div>
+                  <div className="space-y-3">
+                    <Label className="text-[#3b3a3e]">Cambiar contraseña</Label>
+                    <p className="text-sm text-[#6b6a6e]">
+                      Envía al correo del usuario un enlace para que restablezca su contraseña de forma segura.
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleSendPasswordReset}
+                      disabled={sendPasswordResetLoading || !editUserForm.email?.trim()}
+                      className="gap-2 border-[#55c3c5]/50 hover:bg-[#55c3c5]/10 hover:border-[#55c3c5]"
+                    >
+                      <KeyRound className="h-4 w-4" />
+                      {sendPasswordResetLoading ? 'Enviando...' : 'Enviar enlace para restablecer contraseña'}
+                    </Button>
+                  </div>
+                  <div className="space-y-3">
+                    <Label>Roles *</Label>
+                    {roles.length === 0 ? (
+                      <p className="text-sm text-[#6b6a6e]">Cargando roles...</p>
+                    ) : (
+                      <ScrollArea className="h-[200px] border border-gray-300 rounded-md p-3 bg-white shadow-sm">
+                        <div className="space-y-2">
+                          {roles.map((role) => (
+                            <div
+                              key={role.id}
+                              className="flex items-center space-x-2 cursor-pointer rounded-lg p-2 hover:bg-[#55c3c5]/10"
+                              onClick={() => toggleUserRole(role.id)}
+                            >
+                              <input
+                                type="checkbox"
+                                id={`edit-user-role-${role.id}`}
+                                checked={selectedRoleIds.includes(role.id)}
+                                onChange={() => toggleUserRole(role.id)}
+                                className="rounded"
+                              />
+                              <label
+                                htmlFor={`edit-user-role-${role.id}`}
+                                className="text-sm font-medium cursor-pointer flex-1 text-[#3b3a3e]"
+                              >
+                                {role.name}
+                              </label>
+                            </div>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    )}
+                    {selectedRoleIds.length > 0 && (
+                      <p className="text-xs text-[#6b6a6e]">
+                        {selectedRoleIds.length} rol{selectedRoleIds.length !== 1 ? 'es' : ''} seleccionado
+                        {selectedRoleIds.length !== 1 ? 's' : ''}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex gap-3 pt-4">
+                    <Button
+                      variant="outline"
+                      onClick={() => setShowEditUserForm(false)}
+                      disabled={editUserSubmitting}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      onClick={handleSaveEditUser}
+                      disabled={editUserSubmitting}
+                      className="gap-2 bg-[#55c3c5] hover:bg-[#4ab3b5]"
+                    >
+                      {editUserSubmitting ? 'Guardando...' : 'Guardar'}
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           ) : (
           <Card>
             <CardHeader>
@@ -1165,6 +1357,13 @@ export function Usuarios() {
               </div>
             </CardHeader>
             <CardContent>
+              <Alert className="mb-4 border-amber-200 bg-amber-50 text-amber-900 [&>svg]:text-amber-600">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>Importante</AlertTitle>
+                <AlertDescription>
+                  No quitar el rol de administrador al usuario administrador que gestiona este sistema.
+                </AlertDescription>
+              </Alert>
               <div className="mb-4 flex gap-2">
                 <div className="flex-1 relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-[#6b6a6e] pointer-events-none" />
@@ -1229,11 +1428,11 @@ export function Usuarios() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => handleOpenUserRoleDialog(user)}
+                                onClick={() => handleOpenEditUserForm(user)}
                                 className="gap-2"
                               >
                                 <Edit2 className="h-4 w-4" />
-                                Asignar Rol
+                                Editar usuario
                               </Button>
                             </div>
                           </CardContent>
@@ -1515,66 +1714,6 @@ export function Usuarios() {
           </Card>
         </TabsContent>
       </Tabs>
-
-      {/* Dialog para asignar roles a usuario */}
-      <Dialog open={isUserRoleDialogOpen} onOpenChange={setIsUserRoleDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Asignar roles a usuario</DialogTitle>
-            <DialogDescription>
-              Selecciona uno o más roles para {selectedUser?.name} {selectedUser?.lastName}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            <Label>Roles</Label>
-            {roles.length === 0 ? (
-              <p className="text-sm text-[#6b6a6e]">Cargando roles...</p>
-            ) : (
-              <ScrollArea className="h-[240px] border rounded-md p-3">
-                <div className="space-y-2">
-                  {roles.map((role) => (
-                    <div
-                      key={role.id}
-                      className="flex items-center space-x-2 cursor-pointer rounded-lg p-2 hover:bg-[#55c3c5]/10"
-                      onClick={() => toggleUserRole(role.id)}
-                    >
-                      <input
-                        type="checkbox"
-                        id={`user-role-${role.id}`}
-                        checked={selectedRoleIds.includes(role.id)}
-                        onChange={() => toggleUserRole(role.id)}
-                        className="rounded"
-                      />
-                      <label
-                        htmlFor={`user-role-${role.id}`}
-                        className="text-sm font-medium cursor-pointer flex-1"
-                      >
-                        {role.name}
-                      </label>
-                    </div>
-                  ))}
-                </div>
-              </ScrollArea>
-            )}
-            {selectedRoleIds.length > 0 && (
-              <p className="text-xs text-[#6b6a6e]">
-                {selectedRoleIds.length} rol{selectedRoleIds.length !== 1 ? 'es' : ''} seleccionado
-                {selectedRoleIds.length !== 1 ? 's' : ''}
-              </p>
-            )}
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsUserRoleDialogOpen(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleSaveUserRole} className="bg-[#55c3c5] hover:bg-[#4ab3b5]">
-              Asignar roles
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Dialog para crear/editar permiso */}
       <Dialog open={isPermissionDialogOpen} onOpenChange={setIsPermissionDialogOpen}>

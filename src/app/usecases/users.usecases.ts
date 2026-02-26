@@ -127,3 +127,19 @@ export function createUpdateUserRoleUseCase(repo: UsersRepository) {
     },
   };
 }
+
+export function createUpdateUserUseCase(repo: UsersRepository) {
+  return {
+    async execute(request: Parameters<UsersRepository['updateUser']>[0]) {
+      return repo.updateUser(request);
+    },
+  };
+}
+
+export function createSendPasswordResetUseCase(repo: UsersRepository) {
+  return {
+    async execute(email: string) {
+      return repo.sendPasswordReset(email);
+    },
+  };
+}

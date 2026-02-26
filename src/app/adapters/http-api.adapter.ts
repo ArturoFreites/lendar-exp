@@ -371,6 +371,13 @@ export class HttpApiAdapter implements ApiRepository {
     return this.request<null>('/backoffice/api/user', { method: 'PUT', body: JSON.stringify(request) });
   }
 
+  async sendPasswordReset(email: string): Promise<QrResponse<null>> {
+    return this.request<null>('/backoffice/api/auth/send-password-reset', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  }
+
   async registerFcmToken(request: { fcmToken: string; platform?: string; deviceLabel?: string }): Promise<QrResponse<null>> {
     const { getPlatform } = await import('../services/firebase');
     const body: UserFcmTokenRequest = {

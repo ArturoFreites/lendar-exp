@@ -20,6 +20,7 @@ export interface UsersRepository {
   createUser(request: UserCreateRequest): Promise<QrResponse<null>>;
   updateUserRole(request: UserRoleUpdaterRequest): Promise<QrResponse<null>>;
   updateUser(request: UserUpdateRequest): Promise<QrResponse<null>>;
+  sendPasswordReset(email: string): Promise<QrResponse<null>>;
   registerFcmToken(request: { fcmToken: string; platform?: string; deviceLabel?: string }): Promise<QrResponse<null>>;
   getUserSessions(email?: string): Promise<QrResponse<UserSessionResponse[]>>;
   revokeAllSessions(): Promise<QrResponse<null>>;

@@ -17,6 +17,8 @@ import {
   createDeletePermissionUseCase,
   createCreateUserUseCase,
   createUpdateUserRoleUseCase,
+  createUpdateUserUseCase,
+  createSendPasswordResetUseCase,
 } from '../usecases/users.usecases';
 
 export function useUsers() {
@@ -147,6 +149,22 @@ export function useUsers() {
     [apiService]
   );
 
+  const updateUser = useCallback(
+    async (request: Parameters<ReturnType<typeof createUpdateUserUseCase>['execute']>[0]) => {
+      if (!apiService) return null;
+      return createUpdateUserUseCase(apiService).execute(request);
+    },
+    [apiService]
+  );
+
+  const sendPasswordReset = useCallback(
+    async (email: string) => {
+      if (!apiService) return null;
+      return createSendPasswordResetUseCase(apiService).execute(email);
+    },
+    [apiService]
+  );
+
   return {
     getUserProfile,
     getUsers,
@@ -164,6 +182,8 @@ export function useUsers() {
     updatePermission,
     deletePermission,
     updateUserRole,
+    updateUser,
+    sendPasswordReset,
     hasApi: !!apiService,
   };
 }
