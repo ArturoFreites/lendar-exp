@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useRef, ReactNode, useEffect, useCallback } from 'react';
 import { createApiService } from '../services/api';
 import { createLoginUseCase } from '../usecases/login.usecase';
 import { initializeFirebase, initializeMessaging, getFCMToken, getPlatform } from '../services/firebase';
@@ -48,6 +48,13 @@ const STORAGE_KEYS = {
   API_URL: 'lendar_api_url',
 };
 
+/** Fallback when BE does not send TTL (e.g. restored session before first refresh). */
+const DEFAULT_ACCESS_TTL_SECONDS = 15 * 60;
+/** Minimal margin so we refresh just before BE expiry; timing is driven by BE expiresInSeconds. */
+const REFRESH_MARGIN_SECONDS = 5;
+/** On restored session, call refresh once after this delay to get expiresInSeconds from BE, then schedule from that. */
+const RESTORED_SESSION_REFRESH_DELAY_MS = 45 * 1000;
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   // Intentar obtener el contexto de errores de forma segura
   const errorContext = useErrorSafe ? useErrorSafe() : null;
@@ -88,13 +95,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   });
 
-  // Inicializar Firebase al montar
-  useEffect(() => {
-    initializeFirebase();
-    initializeMessaging();
-  }, []);
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduledFromLoginRef = useRef(false);
 
   const clearSession = useCallback(() => {
+    scheduledFromLoginRef.current = false;
+    if (refreshTimerRef.current) {
+      clearTimeout(refreshTimerRef.current);
+      refreshTimerRef.current = null;
+    }
     setUser(null);
     setEnvironment('development');
     setApiUrl(API_URLS.development);
@@ -106,10 +115,57 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     document.cookie = 'refresh_token=; path=/backoffice/api/auth; expires=Thu, 01 Jan 1970 00:00:00 GMT';
   }, []);
 
+  /** Schedules next refresh using only BE timing (expiresInSeconds). Restored session (ttl<=0) triggers one sync refresh to get TTL from BE. */
+  const scheduleProactiveRefresh = useCallback(
+    (service: ReturnType<typeof createApiService>, accessTtlSeconds: number) => {
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current);
+        refreshTimerRef.current = null;
+      }
+      const delayMs =
+        accessTtlSeconds <= 0
+          ? RESTORED_SESSION_REFRESH_DELAY_MS
+          : Math.max(1000, (accessTtlSeconds - REFRESH_MARGIN_SECONDS) * 1000);
+
+      refreshTimerRef.current = setTimeout(async () => {
+        refreshTimerRef.current = null;
+        try {
+          const result = await service.refreshSession();
+          if (result.success && result.expiresInSeconds != null) {
+            scheduleProactiveRefresh(service, result.expiresInSeconds);
+          } else {
+            await service.logoutOnBackend();
+            clearSession();
+          }
+        } catch {
+          await service.logoutOnBackend().catch(() => {});
+          clearSession();
+        }
+      }, delayMs);
+    },
+    [clearSession]
+  );
+
+  useEffect(() => {
+    initializeFirebase();
+    initializeMessaging();
+  }, []);
+
   useEffect(() => {
     registerSessionInvalidHandler(clearSession);
     return () => unregisterSessionInvalidHandler();
   }, [clearSession]);
+
+  useEffect(() => {
+    if (!user || !apiService || scheduledFromLoginRef.current) return;
+    scheduleProactiveRefresh(apiService, 0);
+    return () => {
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current);
+        refreshTimerRef.current = null;
+      }
+    };
+  }, [user, apiService, scheduleProactiveRefresh]);
 
   // Persistir cambios en localStorage
   useEffect(() => {
@@ -139,54 +195,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     timeoutMs: number = 15000,
     required: boolean = true
   ): Promise<string | null> => {
-    console.log('🔔 [FCM] Iniciando obtención de token FCM (OBLIGATORIO)...');
-    console.log('🔔 [FCM] Timeout:', timeoutMs, 'ms');
-    
     try {
-      // Crear una promesa con timeout
       const tokenPromise = getFCMToken();
       const timeoutPromise = new Promise<never>((_, reject) => {
         setTimeout(() => {
-          const error = new Error(`Timeout obteniendo token FCM después de ${timeoutMs}ms`);
-          console.error('⏱️ [FCM]', error.message);
-          reject(error);
+          reject(new Error(`Timeout obteniendo token FCM después de ${timeoutMs}ms`));
         }, timeoutMs);
       });
 
-      // Esperar a que termine cualquiera de las dos promesas
       const token = await Promise.race([tokenPromise, timeoutPromise]);
-      
+
       if (token) {
-        console.log('✅ [FCM] Token FCM obtenido exitosamente:', token.substring(0, 30) + '...');
-        console.log('✅ [FCM] Longitud:', token.length);
         return token;
-      } else {
-        const error = new Error('No se pudo obtener token FCM (retornó null)');
-        console.error('❌ [FCM]', error.message);
-        if (required) {
-          throw error;
-        }
-        return null;
       }
+      const error = new Error('No se pudo obtener token FCM (retornó null)');
+      if (required) {
+        throw error;
+      }
+      return null;
     } catch (error) {
-      console.error('❌ [FCM] Error obteniendo token FCM:', error);
-      if (error instanceof Error) {
-        console.error('❌ [FCM]   Tipo:', error.constructor.name);
-        console.error('❌ [FCM]   Mensaje:', error.message);
-        if (error.stack) {
-          console.error('❌ [FCM]   Stack:', error.stack);
-        }
-      }
-      
       if (required) {
         throw new Error(
           'No se pudo obtener el token FCM. ' +
           'Verifica que las notificaciones estén habilitadas y que el Service Worker esté funcionando correctamente.'
         );
       }
-      
-      // Si no es requerido, retornar null en lugar de lanzar el error
-      console.warn('⚠️ [FCM] Token FCM no obtenido (no requerido), retornando null');
       return null;
     }
   };
@@ -225,11 +258,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
         setEnvironment(env);
 
+        const ttl = result.accessTokenTtlSeconds ?? DEFAULT_ACCESS_TTL_SECONDS;
+        scheduledFromLoginRef.current = true;
+        scheduleProactiveRefresh(service, ttl);
+
         toast.success('¡Bienvenido al sistema!');
 
-        registerFcmTokenAfterLogin(service).catch((err) => {
-          console.error('❌ [FCM] Error no capturado en registerFcmTokenAfterLogin:', err);
-        });
+        registerFcmTokenAfterLogin(service).catch(() => {});
       } else {
         console.error('❌ [LOGIN] Error en respuesta:', result.errorMessage);
         throw new Error(result.errorMessage);
@@ -247,68 +282,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    * Se ejecuta como una petición normal usando el mismo servicio API
    */
   const registerFcmTokenAfterLogin = async (service: ReturnType<typeof createApiService>) => {
-    console.log('🔔 [FCM] Iniciando registro de token FCM después del login...');
-    
     try {
-      // Pequeño delay para asegurar que Firebase esté completamente inicializado
-      console.log('🔔 [FCM] Esperando inicialización de Firebase...');
       await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      console.log('🔔 [FCM] Intentando obtener token FCM...');
-      
-      // Intentar obtener token FCM con timeout y no requerido
+
       let fcmToken: string | null = null;
       try {
         fcmToken = await getFCMTokenWithTimeout(10000, false);
-      } catch (err) {
-        console.warn('⚠️ [FCM] Error obteniendo token:', err);
+      } catch {
         fcmToken = null;
       }
-      
+
       if (!fcmToken) {
-        console.warn('⚠️ [FCM] No se pudo obtener token FCM, se registrará más tarde');
         return;
       }
 
-      console.log('✅ [FCM] Token FCM obtenido:', fcmToken.substring(0, 30) + '...');
-      console.log('🔔 [FCM] Preparando petición al backend (igual que login)...');
-      
-      // Registrar token FCM en el backend con platform (igual que login)
       const platform = getPlatform();
       const deviceLabel = navigator.userAgent || 'Unknown Device';
-      
-      console.log('🔔 [FCM] Datos a enviar:', {
-        fcmToken: fcmToken.substring(0, 30) + '...',
-        platform,
-        deviceLabel: deviceLabel.substring(0, 50) + '...'
-      });
-      
-      console.log('📤 [FCM] Enviando petición POST a /backoffice/api/user/fcm-token');
-      console.log('📤 [FCM] Usando el mismo servicio API que login');
-      
-      // Llamar directamente al método del servicio, igual que login
-      // Esta es la misma forma que se hace login: service.login()
-      const response = await service.registerFcmToken({ 
+
+      await service.registerFcmToken({
         fcmToken,
         platform,
         deviceLabel
       });
-      
-      console.log('✅ [FCM] Respuesta del backend recibida:', response);
-      console.log('✅ [FCM] Código de respuesta:', response.code);
-      console.log('✅ [FCM] Mensaje:', response.message);
-      console.log('✅ [FCM] Token FCM registrado exitosamente en el backend');
     } catch (error: any) {
-      console.error('❌ [FCM] Error registrando token FCM:', error);
-      console.error('❌ [FCM] Tipo de error:', error?.constructor?.name);
-      console.error('❌ [FCM] Detalles del error:', {
-        message: error?.message,
-        code: error?.code,
-        errors: error?.errors,
-        stack: error?.stack
-      });
-      
-      // Mostrar error específico para FCM
       const errorInfo = {
         title: 'Error al registrar notificaciones push',
         message: error?.message || 'No se pudo registrar el token FCM. Las notificaciones push pueden no funcionar correctamente. Puedes intentar recargar la página.',

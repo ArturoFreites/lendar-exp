@@ -1,6 +1,7 @@
 import { triggerGlobalError } from '../utils/globalErrorHandler';
 import { triggerSessionInvalid } from '../utils/sessionInvalidHandler';
 import type { ApiRepository } from '../repositories/api.repository';
+import type { RefreshSessionResult } from '../repositories/auth.repository';
 import type {
   QrResponse,
   BackendPaginationResponse,
@@ -53,10 +54,20 @@ import type {
   ApplicationConfigRequest,
 } from '../types/dto';
 
+interface TokenBundlePayload {
+  data?: { expiresInSeconds?: number };
+}
+
+/** BE returns 401 with body: { code, message, errors: [ "...", "error_code: token_expired" | "error_code: token_invalid" | ... ] } */
+function isTokenExpiredFromBackend(errors: string[] | null | undefined): boolean {
+  if (!errors || !Array.isArray(errors)) return false;
+  return errors.some((e) => String(e).includes('error_code: token_expired'));
+}
+
 export class HttpApiAdapter implements ApiRepository {
   private baseUrl: string;
   private isRefreshing = false;
-  private refreshPromise: Promise<boolean> | null = null;
+  private refreshPromise: Promise<RefreshSessionResult> | null = null;
 
   constructor(baseUrl: string) {
     this.baseUrl = baseUrl;
@@ -66,13 +77,31 @@ export class HttpApiAdapter implements ApiRepository {
     return this.baseUrl;
   }
 
-  private async refreshToken(): Promise<boolean> {
+  async refreshSession(): Promise<RefreshSessionResult> {
+    return this.doRefreshToken();
+  }
+
+  /** Calls BE logout so the server revokes the refresh token and clears cookies. Does not use request() to avoid auth handling. */
+  async logoutOnBackend(): Promise<void> {
+    try {
+      await fetch(`${this.baseUrl}/backoffice/api/auth/logout`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: '{}',
+      });
+    } catch {
+      // Best effort; session invalid will still clear FE state
+    }
+  }
+
+  private async doRefreshToken(): Promise<RefreshSessionResult> {
     if (this.isRefreshing && this.refreshPromise) {
       return this.refreshPromise;
     }
 
     this.isRefreshing = true;
-    this.refreshPromise = (async () => {
+    this.refreshPromise = (async (): Promise<RefreshSessionResult> => {
       try {
         const { getFCMToken, getPlatform } = await import('../services/firebase');
 
@@ -80,7 +109,7 @@ export class HttpApiAdapter implements ApiRepository {
         try {
           fcmToken = await getFCMToken();
         } catch {
-          console.warn('No se pudo obtener token FCM para refresh');
+          // FCM optional for refresh
         }
 
         const platform = getPlatform();
@@ -98,12 +127,15 @@ export class HttpApiAdapter implements ApiRepository {
         }
 
         const response = await fetch(`${this.baseUrl}/backoffice/api/auth/refresh`, requestOptions);
-        if (response.ok) return true;
-        console.error('Error al refrescar token:', response.status);
-        return false;
-      } catch (error) {
-        console.error('Error al refrescar token:', error);
-        return false;
+        if (!response.ok) {
+          return { success: false };
+        }
+        const parsed = (await response.json().catch(() => ({}))) as TokenBundlePayload;
+        const expiresInSeconds =
+          typeof parsed?.data?.expiresInSeconds === 'number' ? parsed.data.expiresInSeconds : undefined;
+        return { success: true, expiresInSeconds };
+      } catch {
+        return { success: false };
       } finally {
         this.isRefreshing = false;
         this.refreshPromise = null;
@@ -116,19 +148,9 @@ export class HttpApiAdapter implements ApiRepository {
   private async request<T>(
     endpoint: string,
     options: RequestInit = {},
-    retryOn403 = true
+    retryAfterAuthError = true
   ): Promise<QrResponse<T>> {
     const url = `${this.baseUrl}${endpoint}`;
-    const isFcmRequest = endpoint.includes('/fcm-token');
-    if (isFcmRequest) {
-      console.log('🌐 [REQUEST] Iniciando petición FCM:', {
-        url,
-        method: options.method || 'GET',
-        hasBody: !!options.body,
-        bodyPreview: options.body ? (typeof options.body === 'string' ? options.body.substring(0, 100) + '...' : 'Object') : undefined,
-      });
-    }
-
     const defaultHeaders: HeadersInit = { 'Content-Type': 'application/json' };
 
     let response: Response;
@@ -138,23 +160,7 @@ export class HttpApiAdapter implements ApiRepository {
         headers: { ...defaultHeaders, ...options.headers },
         credentials: 'include',
       };
-      if (isFcmRequest) {
-        console.log('🌐 [REQUEST] Opciones de fetch:', {
-          method: fetchOptions.method,
-          headers: fetchOptions.headers,
-          hasBody: !!fetchOptions.body,
-          credentials: fetchOptions.credentials,
-        });
-      }
       response = await fetch(url, fetchOptions);
-      if (isFcmRequest) {
-        console.log('🌐 [REQUEST] Respuesta recibida:', {
-          status: response.status,
-          statusText: response.statusText,
-          ok: response.ok,
-          headers: Object.fromEntries(response.headers.entries()),
-        });
-      }
     } catch (networkError) {
       const errorMessage =
         networkError instanceof Error ? networkError.message : 'Error de conexión. Verifica tu conexión a internet.';
@@ -162,34 +168,49 @@ export class HttpApiAdapter implements ApiRepository {
       throw { message: errorMessage, code: 0, isNetworkError: true };
     }
 
-    const isAuthError =
-      (response.status === 401 || response.status === 403) &&
-      retryOn403 &&
-      !endpoint.includes('/auth/refresh') &&
-      !endpoint.includes('/auth/login');
+    const isAuthEndpoint = endpoint.includes('/auth/refresh') || endpoint.includes('/auth/login');
+    const is401 = response.status === 401;
 
-    if (isAuthError) {
-      const errorDataPromise = response.json().catch(() => ({
+    if (is401 && retryAfterAuthError && !isAuthEndpoint) {
+      const errorData = (await response.json().catch(() => ({
         message: `Error ${response.status}: ${response.statusText}`,
         code: response.status,
         errors: undefined as string[] | undefined,
-      }));
+      }))) as { message?: string; code?: number; errors?: string[] };
 
-      const refreshSuccess = await this.refreshToken();
-      if (refreshSuccess) {
-        return this.request<T>(endpoint, options, false);
+      const shouldRetryWithRefresh = isTokenExpiredFromBackend(errorData.errors);
+      if (shouldRetryWithRefresh) {
+        const refreshResult = await this.doRefreshToken();
+        if (refreshResult.success) {
+          return this.request<T>(endpoint, options, false);
+        }
       }
 
-      const errorData = await errorDataPromise;
+      await this.logoutOnBackend();
       const error = {
         message:
           errorData.message ||
-          (response.status === 401 ? 'Sesión expirada. Por favor, inicia sesión nuevamente.' : `Error ${response.status}: ${response.statusText}`),
+          'Sesión expirada. Por favor, inicia sesión nuevamente.',
         code: response.status,
         errors: errorData.errors ?? null,
       };
       triggerGlobalError({ title: 'Sesión inválida', message: error.message, code: error.code, errors: error.errors ?? undefined });
-      if (response.status === 401) triggerSessionInvalid();
+      triggerSessionInvalid();
+      throw error;
+    }
+
+    if (response.status === 403) {
+      const errorData = await response.json().catch(() => ({
+        message: `Error ${response.status}: ${response.statusText}`,
+        code: response.status,
+        errors: undefined as string[] | undefined,
+      }));
+      const error = {
+        message: (errorData as { message?: string }).message || 'No tienes permiso para esta acción.',
+        code: 403,
+        errors: (errorData as { errors?: string[] }).errors ?? null,
+      };
+      triggerGlobalError({ title: 'Acceso denegado', message: error.message, code: error.code, errors: error.errors ?? undefined });
       throw error;
     }
 
@@ -355,7 +376,6 @@ export class HttpApiAdapter implements ApiRepository {
     try {
       return await this.request<null>('/backoffice/api/user/fcm-token', { method: 'POST', body: JSON.stringify(body) });
     } catch (error) {
-      console.error('❌ [API] Error en registerFcmToken:', error);
       throw error;
     }
   }

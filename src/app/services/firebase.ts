@@ -19,10 +19,8 @@ export const initializeFirebase = (): FirebaseApp | null => {
   if (getApps().length === 0) {
     try {
       app = initializeApp(firebaseConfig);
-      console.log('✅ Firebase inicializado');
       return app;
-    } catch (error) {
-      console.error('❌ Error inicializando Firebase:', error);
+    } catch {
       return null;
     }
   }
@@ -35,22 +33,16 @@ export const initializeMessaging = async (): Promise<Messaging | null> => {
     return messaging;
   }
 
-  // Verificar soporte del navegador
   if (typeof window === 'undefined') {
-    console.warn('⚠️ Firebase Messaging requiere un entorno de navegador');
     return null;
   }
 
-  // Verificar soporte de Service Workers
   if (!('serviceWorker' in navigator)) {
-    console.warn('⚠️ Service Workers no soportados en este navegador');
     return null;
   }
 
-  // Verificar soporte de Firebase Messaging
   const supported = await isSupported();
   if (!supported) {
-    console.warn('⚠️ Firebase Messaging no soportado en este navegador');
     return null;
   }
 
@@ -64,12 +56,9 @@ export const initializeMessaging = async (): Promise<Messaging | null> => {
       throw new Error('Firebase no se pudo inicializar');
     }
 
-    // Inicializar Messaging (Firebase buscará automáticamente firebase-messaging-sw.js en la raíz)
     messaging = getMessaging(app);
-    console.log('✅ Firebase Messaging inicializado');
     return messaging;
-  } catch (error) {
-    console.error('❌ Error inicializando Firebase Messaging:', error);
+  } catch {
     return null;
   }
 };
@@ -100,8 +89,7 @@ export const getFCMToken = async (): Promise<string | null> => {
     // for an app instance, first request notification permissions from the user"
     const permission = await Notification.requestPermission();
     if (permission !== 'granted') {
-      console.warn('⚠️ Permisos de notificaciones no concedidos. Token FCM no disponible.');
-      return null; // Retornar null en lugar de lanzar error (según mejores prácticas)
+      return null;
     }
 
     // 4. Inicializar Firebase y Messaging
@@ -124,17 +112,11 @@ export const getFCMToken = async (): Promise<string | null> => {
     });
 
     if (token) {
-      console.log('✅ Token FCM obtenido:', token.substring(0, 30) + '...');
       return token;
     }
 
-    // Si token es null, significa que no se pudo obtener (permisos, SW no disponible, etc.)
-    // Según documentación: "returns a token if permission is granted or rejects the promise if denied"
-    // Pero en la práctica, getToken puede retornar null sin rechazar la promesa
-    console.warn('⚠️ getToken retornó null. Verifica permisos y Service Worker.');
     return null;
   } catch (error: any) {
-    console.error('❌ Error obteniendo token FCM:', error);
     
     // Mensajes de error mejorados según códigos de error comunes
     if (error?.code === 'messaging/permission-blocked') {
@@ -184,11 +166,9 @@ export const onMessageListener = async (callback: (payload: any) => void) => {
     }
 
     return onMessage(messagingInstance, (payload) => {
-      console.log('📨 Mensaje recibido en foreground:', payload);
       callback(payload);
     });
-  } catch (error) {
-    console.error('❌ Error configurando onMessageListener:', error);
+  } catch {
     return () => {};
   }
 };

@@ -118,8 +118,6 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
     try {
       const unsubscribe = await onMessageListener((payload) => {
-        console.log('🔔 Notificación FCM recibida:', payload);
-        
         // Extraer datos del payload
         const notificationData = payload.data || {};
         const notification: NotificationResponse = {
@@ -146,8 +144,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       });
 
       fcmUnsubscribeRef.current = unsubscribe;
-    } catch (error) {
-      console.error('Error configurando FCM:', error);
+    } catch {
+      // FCM no disponible o error de configuración
     }
   }, [isAuthenticated, handleNotificationReceived]);
 
@@ -160,7 +158,6 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
     const handler = (event: MessageEvent) => {
       if (event.data?.type === 'NOTIFICATION_RECEIVED') {
-        console.log('📱 Notificación recibida desde Service Worker:', event.data.payload);
         const payload = event.data.payload;
         
         try {
@@ -185,10 +182,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           };
 
           handleNotificationReceived(notification);
-          // Recargar lista cuando la app vuelve a primer plano desde background
           loadNotifications();
-        } catch (error) {
-          console.error('Error procesando notificación del Service Worker:', error);
+        } catch {
+          // Ignorar error al procesar payload
         }
       }
     };
@@ -229,8 +225,6 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    console.log('🚀 Inicializando notificaciones FCM nativas...');
-    
     // Configurar solo FCM y Service Worker (nativo)
     setupFCM();
     setupServiceWorkerListener();

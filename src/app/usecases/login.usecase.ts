@@ -12,6 +12,7 @@ export interface LoginViewUser {
 export interface LoginResult {
   success: true;
   user: LoginViewUser;
+  accessTokenTtlSeconds?: number;
 }
 
 export interface LoginError {
@@ -37,6 +38,7 @@ export function createLoginUseCase(api: AuthRepository) {
             roles: authData.roles,
             confirmEmail: authData.confirmEmail,
           },
+          accessTokenTtlSeconds: authData.tokens?.expiresInSeconds,
         };
       }
       return {
