@@ -67,6 +67,7 @@ export interface NotificationConfigRequest {
   titleTemplate: string;
   messageTemplate: string;
   deepLinkTemplate?: string | null;
+  description?: string | null;
   metadataTemplate?: unknown;
 }
 
@@ -76,6 +77,7 @@ export interface NotificationConfigResponse {
   titleTemplate: string;
   messageTemplate: string;
   deepLinkTemplate: string | null;
+  description: string | null;
   metadataTemplate: unknown;
   active: boolean;
   createdAt: string;

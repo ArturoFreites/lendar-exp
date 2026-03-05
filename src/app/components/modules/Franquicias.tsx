@@ -130,8 +130,23 @@ export function Franquicias() {
     loadList(0, currentSearch);
   };
 
-  const handleOpenDetail = (item: FranchiseResponse) => {
-    setDetailItem(item);
+  const handleOpenDetail = async (item: FranchiseResponse) => {
+    if (!franchisesApi.hasApi) {
+      setDetailItem(item);
+      return;
+    }
+    try {
+      const response = await franchisesApi.getFranchiseById(item.id);
+      if (response && response.code === 200 && response.data) {
+        setDetailItem(response.data);
+      } else {
+        setDetailItem(item);
+        toast.error(response?.message || 'Ocurrió un error al obtener la franquicia');
+      }
+    } catch (error) {
+      setDetailItem(item);
+      toast.error(error instanceof Error ? error.message : 'Ocurrió un error al obtener la franquicia');
+    }
   };
 
   const handleOpenCreate = () => {
@@ -146,18 +161,59 @@ export function Franquicias() {
   };
 
   const handleOpenEdit = async (item: FranchiseResponse) => {
-    setEditingId(item.id);
-    setFormName(item.name);
-    setFormEmail(item.email ?? '');
-    setFormPhone(item.phone ?? '');
-    setFormResponsible(item.responsible ?? '');
-    setFormCoverage(
-      item.coverage && item.coverage.length > 0
-        ? item.coverage.map((a) => ({ stateId: a.stateId, cityId: a.cityId }))
-        : emptyCoverage
-    );
-    await loadStates();
-    setIsFormOpen(true);
+    if (!franchisesApi.hasApi) {
+      setEditingId(item.id);
+      setFormName(item.name);
+      setFormEmail(item.email ?? '');
+      setFormPhone(item.phone ?? '');
+      setFormResponsible(item.responsible ?? '');
+      setFormCoverage(
+        item.coverage && item.coverage.length > 0
+          ? item.coverage.map((a) => ({ stateId: a.stateId, cityId: a.cityId }))
+          : emptyCoverage
+      );
+      await loadStates();
+      setIsFormOpen(true);
+      return;
+    }
+
+    try {
+      const [response] = await Promise.all([franchisesApi.getFranchiseById(item.id), loadStates()]);
+      const detail =
+        response && response.code === 200 && response.data
+          ? response.data
+          : item;
+
+      if (response && response.code !== 200) {
+        toast.error(response.message || 'Ocurrió un error al obtener la franquicia');
+      }
+
+      setEditingId(detail.id);
+      setFormName(detail.name);
+      setFormEmail(detail.email ?? '');
+      setFormPhone(detail.phone ?? '');
+      setFormResponsible(detail.responsible ?? '');
+      setFormCoverage(
+        detail.coverage && detail.coverage.length > 0
+          ? detail.coverage.map((a) => ({ stateId: a.stateId, cityId: a.cityId }))
+          : emptyCoverage
+      );
+      setIsFormOpen(true);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Ocurrió un error al obtener la franquicia');
+      setEditingId(item.id);
+      setFormName(item.name);
+      setFormEmail(item.email ?? '');
+      setFormPhone(item.phone ?? '');
+      setFormResponsible(item.responsible ?? '');
+      setFormCoverage(
+        item.coverage && item.coverage.length > 0
+          ? item.coverage.map((a) => ({ stateId: a.stateId, cityId: a.cityId }))
+          : emptyCoverage
+      );
+      await loadStates();
+      setIsFormOpen(true);
+    }
   };
 
   const handleSave = async () => {

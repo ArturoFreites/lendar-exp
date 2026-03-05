@@ -101,6 +101,7 @@ export function Notificaciones() {
     titleTemplate: '',
     messageTemplate: '',
     deepLinkTemplate: '',
+    description: '',
     metadataTemplate: null,
   });
   const [currentPage, setCurrentPage] = useState(0);
@@ -246,6 +247,7 @@ export function Notificaciones() {
         titleTemplate: config.titleTemplate,
         messageTemplate: config.messageTemplate,
         deepLinkTemplate: config.deepLinkTemplate || '',
+        description: config.description || '',
         metadataTemplate: config.metadataTemplate,
       });
       setConfigEditorFullScreen(config.id);
@@ -256,6 +258,7 @@ export function Notificaciones() {
         titleTemplate: '',
         messageTemplate: '',
         deepLinkTemplate: '',
+        description: '',
         metadataTemplate: null,
       });
       setConfigEditorFullScreen('new');
@@ -290,6 +293,7 @@ export function Notificaciones() {
         titleTemplate: configForm.titleTemplate.trim(),
         messageTemplate: configForm.messageTemplate.trim(),
         deepLinkTemplate: configForm.deepLinkTemplate?.trim() || null,
+        description: configForm.description?.trim() || null,
         metadataTemplate: configForm.metadataTemplate || null,
       };
 
@@ -431,6 +435,16 @@ export function Notificaciones() {
                     className={editingConfig ? 'bg-[#f1f1f2] text-[#6b6a6e]' : ''}
                   />
                   {editingConfig && <p className="text-xs text-[#6b6a6e]">La clave no se puede modificar</p>}
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-[#3b3a3e]">Descripción (opcional)</Label>
+                  <Input
+                    value={configForm.description ?? ''}
+                    onChange={(e) => setConfigForm((f) => ({ ...f, description: e.target.value }))}
+                    placeholder="ej: Notificación cuando se asigna una tarea al usuario"
+                  />
+                  <p className="text-xs text-[#6b6a6e]">Texto informativo para identificar esta configuración.</p>
                 </div>
 
                 <div className="space-y-2">
@@ -732,6 +746,9 @@ export function Notificaciones() {
                                     {config.active ? 'Activa' : 'Inactiva'}
                                   </Badge>
                                 </div>
+                                {config.description && (
+                                  <p className="text-[#6b6a6e] text-sm mb-2">{config.description}</p>
+                                )}
                                 <p className="text-[#6b6a6e] text-sm mb-1">
                                   <span className="font-medium">Título:</span> {config.titleTemplate}
                                 </p>
@@ -787,6 +804,7 @@ export function Notificaciones() {
                                         titleTemplate: config.titleTemplate,
                                         messageTemplate: config.messageTemplate,
                                         deepLinkTemplate: config.deepLinkTemplate ?? null,
+                                        description: config.description ?? null,
                                         metadataTemplate: config.metadataTemplate ?? null,
                                       })
                                     }

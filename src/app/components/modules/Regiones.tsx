@@ -43,7 +43,6 @@ export function Regiones() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [formName, setFormName] = useState('');
-  const [formAddressJson, setFormAddressJson] = useState('');
   const [formCoverage, setFormCoverage] = useState<CoverageAreaRequest[]>(emptyCoverage);
   const [saving, setSaving] = useState(false);
   const [states, setStates] = useState<StateResponse[]>([]);
@@ -121,32 +120,78 @@ export function Regiones() {
     loadList(0, currentSearch);
   };
 
-  const handleOpenDetail = (item: RegionResponse) => {
-    setDetailItem(item);
+  const handleOpenDetail = async (item: RegionResponse) => {
+    if (!regionsApi.hasApi) {
+      setDetailItem(item);
+      return;
+    }
+    try {
+      const response = await regionsApi.getRegionById(item.id);
+      if (response && response.code === 200 && response.data) {
+        setDetailItem(response.data);
+      } else {
+        setDetailItem(item);
+        toast.error(response?.message || 'Ocurrió un error al obtener la región');
+      }
+    } catch (error) {
+      setDetailItem(item);
+      toast.error(error instanceof Error ? error.message : 'Ocurrió un error al obtener la región');
+    }
   };
 
   const handleOpenCreate = () => {
     setEditingId(null);
     setFormName('');
-    setFormAddressJson('');
     setFormCoverage(states.length ? [{ stateId: states[0].id, cityId: null }] : emptyCoverage);
     loadStates();
     setIsFormOpen(true);
   };
 
   const handleOpenEdit = async (item: RegionResponse) => {
-    setEditingId(item.id);
-    setFormName(item.name);
-    setFormAddressJson(
-      item.address && Object.keys(item.address).length > 0 ? JSON.stringify(item.address, null, 2) : ''
-    );
-    setFormCoverage(
-      item.coverage && item.coverage.length > 0
-        ? item.coverage.map((a) => ({ stateId: a.stateId, cityId: a.cityId }))
-        : emptyCoverage
-    );
-    await loadStates();
-    setIsFormOpen(true);
+    if (!regionsApi.hasApi) {
+      setEditingId(item.id);
+      setFormName(item.name);
+      setFormCoverage(
+        item.coverage && item.coverage.length > 0
+          ? item.coverage.map((a) => ({ stateId: a.stateId, cityId: a.cityId }))
+          : emptyCoverage
+      );
+      await loadStates();
+      setIsFormOpen(true);
+      return;
+    }
+
+    try {
+      const [response] = await Promise.all([regionsApi.getRegionById(item.id), loadStates()]);
+      const detail =
+        response && response.code === 200 && response.data
+          ? response.data
+          : item;
+
+      if (response && response.code !== 200) {
+        toast.error(response.message || 'Ocurrió un error al obtener la región');
+      }
+
+      setEditingId(detail.id);
+      setFormName(detail.name);
+      setFormCoverage(
+        detail.coverage && detail.coverage.length > 0
+          ? detail.coverage.map((a) => ({ stateId: a.stateId, cityId: a.cityId }))
+          : emptyCoverage
+      );
+      setIsFormOpen(true);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Ocurrió un error al obtener la región');
+      setEditingId(item.id);
+      setFormName(item.name);
+      setFormCoverage(
+        item.coverage && item.coverage.length > 0
+          ? item.coverage.map((a) => ({ stateId: a.stateId, cityId: a.cityId }))
+          : emptyCoverage
+      );
+      await loadStates();
+      setIsFormOpen(true);
+    }
   };
 
   const handleSave = async () => {
@@ -156,15 +201,6 @@ export function Regiones() {
       toast.error('El nombre es obligatorio');
       return;
     }
-    let address: Record<string, unknown> | null = null;
-    if (formAddressJson.trim()) {
-      try {
-        address = JSON.parse(formAddressJson) as Record<string, unknown>;
-      } catch {
-        toast.error('La dirección debe ser un JSON válido');
-        return;
-      }
-    }
     const coverage = formCoverage.filter((a) => a.stateId > 0);
     if (coverage.length === 0) {
       toast.error('Agregá al menos una zona de cobertura con provincia seleccionada');
@@ -173,7 +209,7 @@ export function Regiones() {
     setSaving(true);
     try {
       if (editingId != null) {
-        const response = await regionsApi.updateRegion(editingId, { name, address, coverage });
+        const response = await regionsApi.updateRegion(editingId, { name, coverage });
         if (response.code === 200) {
           toast.success('Región actualizada correctamente');
           setIsFormOpen(false);
@@ -182,7 +218,7 @@ export function Regiones() {
           toast.error(response.message || 'Ocurrió un error');
         }
       } else {
-        const response = await regionsApi.createRegion({ name, address, coverage });
+        const response = await regionsApi.createRegion({ name, address: null, coverage });
         if (response.code === 200 || response.code === 201) {
           toast.success('Región creada correctamente');
           setIsFormOpen(false);
@@ -230,16 +266,6 @@ export function Regiones() {
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
                   placeholder="Ej: Región Norte"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="region-address">Dirección (JSON opcional)</Label>
-                <textarea
-                  id="region-address"
-                  className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  value={formAddressJson}
-                  onChange={(e) => setFormAddressJson(e.target.value)}
-                  placeholder='{"street": "...", "city": "..."}'
                 />
               </div>
               <CoverageAreaEditor
