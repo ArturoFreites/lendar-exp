@@ -746,9 +746,10 @@ export function Notificaciones() {
                                     {config.active ? 'Activa' : 'Inactiva'}
                                   </Badge>
                                 </div>
-                                {config.description && (
-                                  <p className="text-[#6b6a6e] text-sm mb-2">{config.description}</p>
-                                )}
+                                <p className="text-[#6b6a6e] text-sm mb-2">
+                                  <span className="font-medium">Descripción:</span>{' '}
+                                  {config.description?.trim() || '—'}
+                                </p>
                                 <p className="text-[#6b6a6e] text-sm mb-1">
                                   <span className="font-medium">Título:</span> {config.titleTemplate}
                                 </p>
