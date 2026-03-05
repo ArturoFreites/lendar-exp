@@ -85,6 +85,12 @@ function replacePlaceholdersForPreview(text: string): string {
     .replace(/\{(\w+)\}/g, (_, key) => samples[key] ?? `[${key}]`);
 }
 
+/** Quita etiquetas HTML de un texto para mostrarlo como texto plano (título y descripción). */
+function stripHtml(html: string | null | undefined): string {
+  if (html == null || typeof html !== 'string') return '';
+  return html.replace(/<[^>]*>/g, '').trim();
+}
+
 export function Notificaciones() {
   const { notifications: contextNotifications, refreshNotifications: refreshContextNotifications } = useNotifications();
   const notificationApi = useNotificationUseCases();
@@ -253,10 +259,10 @@ export function Notificaciones() {
       setEditingConfig(config);
       setConfigForm({
         key: config.key,
-        titleTemplate: config.titleTemplate,
+        titleTemplate: stripHtml(config.titleTemplate),
         messageTemplate: config.messageTemplate,
         deepLinkTemplate: config.deepLinkTemplate || '',
-        description: config.description || '',
+        description: stripHtml(config.description),
         metadataTemplate: config.metadataTemplate,
       });
       setConfigEditorFullScreen(config.id);
@@ -286,7 +292,7 @@ export function Notificaciones() {
       toast.error('La clave es obligatoria');
       return;
     }
-    if (!configForm.titleTemplate.trim()) {
+    if (!stripHtml(configForm.titleTemplate).trim()) {
       toast.error('El template del título es obligatorio');
       return;
     }
@@ -299,10 +305,10 @@ export function Notificaciones() {
     try {
       const request: NotificationConfigRequest = {
         key: configForm.key.trim(),
-        titleTemplate: configForm.titleTemplate.trim(),
+        titleTemplate: stripHtml(configForm.titleTemplate).trim(),
         messageTemplate: configForm.messageTemplate.trim(),
         deepLinkTemplate: configForm.deepLinkTemplate?.trim() || null,
-        description: configForm.description?.trim() || null,
+        description: stripHtml(configForm.description).trim() || null,
         metadataTemplate: configForm.metadataTemplate || null,
       };
 
@@ -409,7 +415,7 @@ export function Notificaciones() {
 
   // Vista pantalla completa: editor de configuración + preview mockup móvil
   if (configEditorFullScreen !== null) {
-    const previewTitle = replacePlaceholdersForPreview(configForm.titleTemplate);
+    const previewTitle = replacePlaceholdersForPreview(stripHtml(configForm.titleTemplate));
     const previewMessage = configForm.messageTemplate || '<p class="text-[#6b6a6e] text-sm">Escribí el mensaje para ver la vista previa.</p>';
 
     return (
@@ -775,10 +781,10 @@ export function Notificaciones() {
                                 </div>
                                 <p className="text-[#6b6a6e] text-sm mb-2">
                                   <span className="font-medium">Descripción:</span>{' '}
-                                  {config.description?.trim() || '—'}
+                                  {stripHtml(config.description) || '—'}
                                 </p>
                                 <p className="text-[#6b6a6e] text-sm mb-1">
-                                  <span className="font-medium">Título:</span> {config.titleTemplate}
+                                  <span className="font-medium">Título:</span> {stripHtml(config.titleTemplate)}
                                 </p>
                                 <p className="text-[#6b6a6e] text-sm mb-2 line-clamp-2">
                                   <span className="font-medium">Mensaje:</span> {config.messageTemplate}
