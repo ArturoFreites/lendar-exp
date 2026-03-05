@@ -16,6 +16,13 @@ import { TablePagination } from '../ui/table-pagination';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../ui/select';
 import { Mail, Plus, Edit2, Search, Power, PowerOff, Layout, Eye, ArrowLeft, Save, Send, Upload } from 'lucide-react';
 import {
   Dialog,
@@ -111,6 +118,7 @@ export function Emails() {
   const [totalElements, setTotalElements] = useState(0);
   const [configSearch, setConfigSearch] = useState('');
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [configSort, setConfigSort] = useState<string>('createdAt:desc');
 
   // Pantalla completa: null = lista, 'new' = nueva plantilla, number = editar id
   const [editorFullScreen, setEditorFullScreen] = useState<null | 'new' | number>(null);
@@ -135,7 +143,7 @@ export function Emails() {
     if (!emailsApi.hasApi) return;
     setConfigLoading(true);
     try {
-      const params: Record<string, string> = { page: page.toString(), size: '10' };
+      const params: Record<string, string> = { page: page.toString(), size: '10', sort: configSort };
       if (search?.trim()) params.contains = `key:${search.trim()}`;
       const response = await emailsApi.getEmailConfigs(params);
       if (response?.code === 200 && response.data) {
@@ -561,6 +569,24 @@ export function Emails() {
                     <Search className="h-4 w-4" />
                   </Button>
                 </div>
+                <Select
+                  value={configSort}
+                  onValueChange={(value) => {
+                    setConfigSort(value);
+                    setCurrentPage(0);
+                    loadEmailConfigs(0, configSearch);
+                  }}
+                >
+                  <SelectTrigger className="w-[240px] shrink-0">
+                    <SelectValue placeholder="Ordenar por" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="createdAt:desc">Fecha de creación (más recientes primero)</SelectItem>
+                    <SelectItem value="createdAt:asc">Fecha de creación (más antiguas primero)</SelectItem>
+                    <SelectItem value="key:asc">Nombre / clave (A-Z)</SelectItem>
+                    <SelectItem value="key:desc">Nombre / clave (Z-A)</SelectItem>
+                  </SelectContent>
+                </Select>
                 <Button onClick={() => openEditorFullScreen()} className="bg-[#55c3c5] hover:bg-[#4ab3b5] gap-2">
                   <Plus className="h-4 w-4" />
                   Nueva plantilla

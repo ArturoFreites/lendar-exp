@@ -20,6 +20,13 @@ import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
 import { Switch } from '../ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../ui/select';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '../ui/resizable';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
 import { 
@@ -111,6 +118,7 @@ export function Notificaciones() {
   // Config search state
   const [configSearch, setConfigSearch] = useState('');
   const configSearchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [configSort, setConfigSort] = useState<string>('createdAt:desc');
 
   // User search state
   const [userIdSearch, setUserIdSearch] = useState('');
@@ -154,8 +162,9 @@ export function Notificaciones() {
       const params: Record<string, string> = {
         page: page.toString(),
         size: '10',
+        sort: configSort,
       };
-      if (search && search.trim()) {
+      if (search !== undefined && search.trim()) {
         params.contains = `key:${search.trim()}`;
       }
 
@@ -709,6 +718,24 @@ export function Notificaciones() {
                     className="pl-10"
                   />
                 </div>
+                <Select
+                  value={configSort}
+                  onValueChange={(value) => {
+                    setConfigSort(value);
+                    setCurrentPage(0);
+                    loadNotificationConfigs(0, configSearch);
+                  }}
+                >
+                  <SelectTrigger className="w-[240px] shrink-0">
+                    <SelectValue placeholder="Ordenar por" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="createdAt:desc">Fecha de creación (más recientes primero)</SelectItem>
+                    <SelectItem value="createdAt:asc">Fecha de creación (más antiguas primero)</SelectItem>
+                    <SelectItem value="key:asc">Nombre / clave (A-Z)</SelectItem>
+                    <SelectItem value="key:desc">Nombre / clave (Z-A)</SelectItem>
+                  </SelectContent>
+                </Select>
                 <Button
                   type="button"
                   variant="outline"
