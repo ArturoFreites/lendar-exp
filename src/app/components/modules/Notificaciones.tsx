@@ -787,7 +787,7 @@ export function Notificaciones() {
                                   <span className="font-medium">Título:</span> {stripHtml(config.titleTemplate)}
                                 </p>
                                 <p className="text-[#6b6a6e] text-sm mb-2 line-clamp-2">
-                                  <span className="font-medium">Mensaje:</span> {config.messageTemplate}
+                                  <span className="font-medium">Mensaje:</span> {stripHtml(config.messageTemplate)}
                                 </p>
                                 {config.deepLinkTemplate && (
                                   <p className="text-[#6b6a6e] text-xs mb-2">
