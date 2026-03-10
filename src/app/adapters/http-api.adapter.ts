@@ -152,7 +152,8 @@ export class HttpApiAdapter implements ApiRepository {
     retryAfterAuthError = true
   ): Promise<QrResponse<T>> {
     const url = `${this.baseUrl}${endpoint}`;
-    const defaultHeaders: HeadersInit = { 'Content-Type': 'application/json' };
+    const isFormData = options.body instanceof FormData;
+    const defaultHeaders: HeadersInit = isFormData ? {} : { 'Content-Type': 'application/json' };
 
     let response: Response;
     try {
@@ -361,6 +362,15 @@ export class HttpApiAdapter implements ApiRepository {
     const response = await this.request<BackendPaginationResponse<MigratedPersonResponse>>(endpoint, { method: 'GET' });
     if (response.data) return { ...response, data: this.normalizePaginationResponse(response.data) };
     return { ...response, data: null };
+  }
+
+  async importMigratedPersonsCsv(file: File): Promise<QrResponse<number>> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.request<number>('/backoffice/api/migratedPerson/import', {
+      method: 'POST',
+      body: formData,
+    });
   }
 
   async updateUserRole(request: UserRoleUpdaterRequest): Promise<QrResponse<null>> {

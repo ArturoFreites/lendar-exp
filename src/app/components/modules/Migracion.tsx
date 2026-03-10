@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useMigratedPerson } from '../../hooks/use-migrated-person';
 import type { MigratedPersonResponse } from '../../types/dto';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
@@ -7,7 +7,7 @@ import { Badge } from '../ui/badge';
 import { ScrollArea } from '../ui/scroll-area';
 import { TablePagination } from '../ui/table-pagination';
 import { Input } from '../ui/input';
-import { Search, UserCheck, FileText, RefreshCw, Users, ArrowLeft, ChevronRight } from 'lucide-react';
+import { Search, UserCheck, FileText, RefreshCw, Users, ArrowLeft, ChevronRight, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -25,6 +25,8 @@ export function Migracion() {
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
   const [search, setSearch] = useState('');
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const load = async (page: number = 0, searchTerm?: string) => {
     if (!migratedApi.hasApi) {
@@ -82,6 +84,31 @@ export function Migracion() {
     load(0);
   };
 
+  const handleImportCsv = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !migratedApi.hasApi) return;
+    if (!file.name.toLowerCase().endsWith('.csv')) {
+      toast.error('El archivo debe ser un CSV (.csv)');
+      return;
+    }
+    setImporting(true);
+    try {
+      const response = await migratedApi.importMigratedPersonsCsv(file);
+      if (response?.code === 200 || response?.code === 201) {
+        const rows = response.data ?? 0;
+        toast.success(response.message || `Importación completada. ${rows} fila${rows !== 1 ? 's' : ''} procesada${rows !== 1 ? 's' : ''}.`);
+        load(currentPage, search);
+      } else {
+        toast.error(response?.message ?? 'Error al importar el CSV');
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al importar el CSV');
+    } finally {
+      setImporting(false);
+    }
+  };
+
   const handleBackToCards = () => {
     setSelectedSubmodule(null);
   };
@@ -136,6 +163,22 @@ export function Migracion() {
                   className="pl-9 h-10 border-[#e5e5e6] text-[#3b3a3e] placeholder:text-[#9b9a9e] focus-visible:ring-[#55c3c5]"
                 />
               </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv"
+                className="hidden"
+                onChange={handleImportCsv}
+              />
+              <Button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={loading || importing || !migratedApi.hasApi}
+                variant="outline"
+                className="h-10 gap-2 border-[#e5e5e6] text-[#6b6a6e] hover:bg-[#f5f5f6]"
+              >
+                <Upload className={importing ? 'h-4 w-4 animate-pulse' : 'h-4 w-4'} />
+                {importing ? 'Importando…' : 'Importar CSV'}
+              </Button>
               <Button
                 onClick={handleSearch}
                 disabled={loading}

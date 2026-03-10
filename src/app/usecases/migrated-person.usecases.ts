@@ -7,3 +7,11 @@ export function createGetMigratedPersonsUseCase(repo: MigratedPersonRepository) 
     },
   };
 }
+
+export function createImportMigratedPersonsCsvUseCase(repo: MigratedPersonRepository) {
+  return {
+    async execute(file: File) {
+      return repo.importMigratedPersonsCsv(file);
+    },
+  };
+}

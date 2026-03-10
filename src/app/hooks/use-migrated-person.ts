@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { createGetMigratedPersonsUseCase } from '../usecases/migrated-person.usecases';
+import { createGetMigratedPersonsUseCase, createImportMigratedPersonsCsvUseCase } from '../usecases/migrated-person.usecases';
 
 export function useMigratedPerson() {
   const { apiService } = useAuth();
@@ -13,8 +13,17 @@ export function useMigratedPerson() {
     [apiService]
   );
 
+  const importMigratedPersonsCsv = useCallback(
+    async (file: File) => {
+      if (!apiService) return null;
+      return createImportMigratedPersonsCsvUseCase(apiService).execute(file);
+    },
+    [apiService]
+  );
+
   return {
     getMigratedPersons,
+    importMigratedPersonsCsv,
     hasApi: !!apiService,
   };
 }
