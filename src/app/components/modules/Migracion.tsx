@@ -7,12 +7,23 @@ import { Badge } from '../ui/badge';
 import { ScrollArea } from '../ui/scroll-area';
 import { TablePagination } from '../ui/table-pagination';
 import { Input } from '../ui/input';
-import { Search, UserCheck, FileText, RefreshCw, Users, ArrowLeft, ChevronRight, Upload } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../ui/dialog';
+import { Search, UserCheck, FileText, RefreshCw, Users, ArrowLeft, ChevronRight, Upload, FileDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 const PAGE_SIZE = 10;
+
+const SAMPLE_CSV =
+  'Pr\u00E9stamo,Solicitante nombre,Solicitante apellido,Solicitante DNI,Solicitante email,Inversor nombre,Inversor apellido,Inversor DNI,Inversor email\n#12345,Juan,P\u00E9rez,30123456,juan.perez@ejemplo.com,Mar\u00EDa,Garc\u00EDa,31234567,maria.garcia@ejemplo.com\n67890,Carlos,L\u00F3pez,32345678,carlos.lopez@ejemplo.com,Ana,Mart\u00EDnez,33456789,ana.martinez@ejemplo.com';
 
 type SelectedSubmodule = null | 'usuarios-migrados';
 
@@ -27,6 +38,8 @@ export function Migracion() {
   const [search, setSearch] = useState('');
   const [importing, setImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   const load = async (page: number = 0, searchTerm?: string) => {
     if (!migratedApi.hasApi) {
@@ -84,20 +97,30 @@ export function Migracion() {
     load(0);
   };
 
-  const handleImportCsv = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file || !migratedApi.hasApi) return;
-    if (!file.name.toLowerCase().endsWith('.csv')) {
+  const downloadSampleCsv = () => {
+    const blob = new Blob(['\uFEFF' + SAMPLE_CSV], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'usuarios-migrados-ejemplo.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleConfirmImport = async () => {
+    if (!selectedFile || !migratedApi.hasApi) return;
+    if (!selectedFile.name.toLowerCase().endsWith('.csv')) {
       toast.error('El archivo debe ser un CSV (.csv)');
       return;
     }
     setImporting(true);
     try {
-      const response = await migratedApi.importMigratedPersonsCsv(file);
+      const response = await migratedApi.importMigratedPersonsCsv(selectedFile);
       if (response?.code === 200 || response?.code === 201) {
         const rows = response.data ?? 0;
         toast.success(response.message || `Importación completada. ${rows} fila${rows !== 1 ? 's' : ''} procesada${rows !== 1 ? 's' : ''}.`);
+        setImportModalOpen(false);
+        setSelectedFile(null);
         load(currentPage, search);
       } else {
         toast.error(response?.message ?? 'Error al importar el CSV');
@@ -107,6 +130,23 @@ export function Migracion() {
     } finally {
       setImporting(false);
     }
+  };
+
+  const handleFileSelectInModal = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (file) setSelectedFile(file);
+  };
+
+  const handleDropInModal = (e: React.DragEvent) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.name.toLowerCase().endsWith('.csv')) setSelectedFile(file);
+    else if (file) toast.error('El archivo debe ser un CSV (.csv)');
+  };
+
+  const handleDragOverInModal = (e: React.DragEvent) => {
+    e.preventDefault();
   };
 
   const handleBackToCards = () => {
@@ -168,16 +208,17 @@ export function Migracion() {
                 type="file"
                 accept=".csv"
                 className="hidden"
-                onChange={handleImportCsv}
+                aria-hidden
+                onChange={handleFileSelectInModal}
               />
               <Button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={loading || importing || !migratedApi.hasApi}
+                onClick={() => setImportModalOpen(true)}
+                disabled={loading || !migratedApi.hasApi}
                 variant="outline"
                 className="h-10 gap-2 border-[#e5e5e6] text-[#6b6a6e] hover:bg-[#f5f5f6]"
               >
-                <Upload className={importing ? 'h-4 w-4 animate-pulse' : 'h-4 w-4'} />
-                {importing ? 'Importando…' : 'Importar CSV'}
+                <Upload className="h-4 w-4" />
+                Importar CSV
               </Button>
               <Button
                 onClick={handleSearch}
@@ -298,6 +339,60 @@ export function Migracion() {
             )}
           </CardContent>
         </Card>
+
+        <Dialog open={importModalOpen} onOpenChange={(open) => { setImportModalOpen(open); if (!open) setSelectedFile(null); }}>
+          <DialogContent className="sm:max-w-md text-[#3b3a3e] border-[#e5e5e6]">
+            <DialogHeader>
+              <DialogTitle className="text-xl text-[#3b3a3e]">Importar usuarios migrados</DialogTitle>
+              <DialogDescription className="text-[#6b6a6e] text-left">
+                Sube un archivo CSV con el listado de solicitantes e inversores. La primera fila debe ser la cabecera. Cada fila puede incluir datos de solicitante (columnas 1-4) y/o inversor (columnas 5-8). Se requiere DNI o email por persona.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={downloadSampleCsv}
+                className="w-full gap-2 border-[#e5e5e6] text-[#6b6a6e] hover:bg-[#f5f5f6]"
+              >
+                <FileDown className="h-4 w-4" />
+                Descargar archivo de ejemplo
+              </Button>
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => fileInputRef.current?.click()}
+                onDrop={handleDropInModal}
+                onDragOver={handleDragOverInModal}
+                className="border-2 border-dashed border-[#e5e5e6] rounded-lg p-8 text-center cursor-pointer transition-colors hover:border-[#55c3c5]/60 hover:bg-[#55c3c5]/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#55c3c5]"
+              >
+                <Upload className="h-10 w-10 mx-auto text-[#9b9a9e] mb-3" />
+                <p className="text-sm font-medium text-[#3b3a3e]">
+                  {selectedFile ? selectedFile.name : 'Arrastra aquí tu CSV o haz clic para seleccionar'}
+                </p>
+                <p className="text-xs text-[#6b6a6e] mt-1">Solo archivos .csv</p>
+              </div>
+            </div>
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => { setImportModalOpen(false); setSelectedFile(null); }}
+                className="border-[#e5e5e6] text-[#6b6a6e] hover:bg-[#f5f5f6]"
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                disabled={!selectedFile || importing}
+                onClick={handleConfirmImport}
+                className="bg-[#55c3c5] hover:bg-[#4ab3b5] text-white border-0"
+              >
+                {importing ? 'Importando…' : 'Importar'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }
