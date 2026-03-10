@@ -97,6 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scheduledFromLoginRef = useRef(false);
+  const lastVisibilityRefreshRef = useRef(0);
 
   const clearSession = useCallback(() => {
     scheduledFromLoginRef.current = false;
@@ -155,6 +156,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     registerSessionInvalidHandler(clearSession);
     return () => unregisterSessionInvalidHandler();
   }, [clearSession]);
+
+  /** Al volver a la pestaña, intentar refrescar la sesión (el timer puede haberse throttled en background). */
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (!user) return;
+      const now = Date.now();
+      if (now - lastVisibilityRefreshRef.current < 2000) return;
+      lastVisibilityRefreshRef.current = now;
+
+      const service = apiService ?? (apiUrl ? createApiService(apiUrl) : null);
+      if (!service) return;
+      if (!apiService) setApiService(service);
+
+      service.refreshSession().then(
+        (result) => {
+          if (result.success && result.expiresInSeconds != null) {
+            scheduleProactiveRefresh(service, result.expiresInSeconds);
+          } else {
+            service.logoutOnBackend().then(clearSession, () => clearSession());
+          }
+        },
+        () => {
+          service.logoutOnBackend().catch(() => {});
+          clearSession();
+        }
+      );
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+  }, [user, apiUrl, apiService, clearSession, scheduleProactiveRefresh]);
 
   useEffect(() => {
     if (!user || !apiService || scheduledFromLoginRef.current) return;

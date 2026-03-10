@@ -59,12 +59,6 @@ interface TokenBundlePayload {
   data?: { expiresInSeconds?: number };
 }
 
-/** BE returns 401 with body: { code, message, errors: [ "...", "error_code: token_expired" | "error_code: token_invalid" | ... ] } */
-function isTokenExpiredFromBackend(errors: string[] | null | undefined): boolean {
-  if (!errors || !Array.isArray(errors)) return false;
-  return errors.some((e) => String(e).includes('error_code: token_expired'));
-}
-
 export class HttpApiAdapter implements ApiRepository {
   private baseUrl: string;
   private isRefreshing = false;
@@ -180,12 +174,9 @@ export class HttpApiAdapter implements ApiRepository {
         errors: undefined as string[] | undefined,
       }))) as { message?: string; code?: number; errors?: string[] };
 
-      const shouldRetryWithRefresh = isTokenExpiredFromBackend(errorData.errors);
-      if (shouldRetryWithRefresh) {
-        const refreshResult = await this.doRefreshToken();
-        if (refreshResult.success) {
-          return this.request<T>(endpoint, options, false);
-        }
+      const refreshResult = await this.doRefreshToken();
+      if (refreshResult.success) {
+        return this.request<T>(endpoint, options, false);
       }
 
       await this.logoutOnBackend();
