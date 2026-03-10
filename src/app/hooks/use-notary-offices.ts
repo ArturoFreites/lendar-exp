@@ -7,6 +7,10 @@ import {
   createGetNotaryOfficeByIdUseCase,
   createCreateNotaryOfficeUseCase,
   createUpdateNotaryOfficeUseCase,
+  createGetNotaryOfficeUsersUseCase,
+  createSearchNotaryOfficeUsersUseCase,
+  createAssignNotaryOfficeUserUseCase,
+  createCreateNotaryOfficeUserUseCase,
 } from '../usecases/notary-offices.usecases';
 
 export function useNotaryOffices() {
@@ -60,6 +64,38 @@ export function useNotaryOffices() {
     [apiService]
   );
 
+  const getNotaryOfficeUsers = useCallback(
+    async (officeId: number) => {
+      if (!apiService) return null;
+      return createGetNotaryOfficeUsersUseCase(apiService).execute(officeId);
+    },
+    [apiService]
+  );
+
+  const searchNotaryOfficeUsers = useCallback(
+    async (params?: Record<string, string>) => {
+      if (!apiService) return null;
+      return createSearchNotaryOfficeUsersUseCase(apiService).execute(params);
+    },
+    [apiService]
+  );
+
+  const assignNotaryOfficeUser = useCallback(
+    async (officeId: number, userId: number) => {
+      if (!apiService) return null;
+      return createAssignNotaryOfficeUserUseCase(apiService).execute(officeId, userId);
+    },
+    [apiService]
+  );
+
+  const createNotaryOfficeUser = useCallback(
+    async (officeId: number, request: { name: string; lastName: string; email: string; password: string }) => {
+      if (!apiService) return null;
+      return createCreateNotaryOfficeUserUseCase(apiService).execute(officeId, request);
+    },
+    [apiService]
+  );
+
   return {
     getNotaryOffices,
     getStates,
@@ -67,6 +103,10 @@ export function useNotaryOffices() {
     getNotaryOfficeById,
     createNotaryOffice,
     updateNotaryOffice,
+    getNotaryOfficeUsers,
+    searchNotaryOfficeUsers,
+    assignNotaryOfficeUser,
+    createNotaryOfficeUser,
     hasApi: !!apiService,
   };
 }

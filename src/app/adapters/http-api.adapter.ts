@@ -35,6 +35,7 @@ import type {
   NotaryOfficeResponse,
   NotaryOfficeRequest,
   NotaryOfficeUpdateRequest,
+  NotaryOfficeUserCreateRequest,
   ApplicationReceivedResponse,
   ActionResponse,
   TaskConfigActionsResponse,
@@ -500,6 +501,32 @@ export class HttpApiAdapter implements ApiRepository {
 
   async updateNotaryOffice(id: number, request: NotaryOfficeUpdateRequest): Promise<QrResponse<NotaryOfficeResponse>> {
     return this.request<NotaryOfficeResponse>(`/backoffice/api/notaryOffice/${id}`, { method: 'PUT', body: JSON.stringify(request) });
+  }
+
+  async getNotaryOfficeUsers(officeId: number): Promise<QrResponse<UserResponse[]>> {
+    return this.request<UserResponse[]>(`/backoffice/api/notaryOffice/${officeId}/users`, { method: 'GET' });
+  }
+
+  async searchNotaryOfficeUsers(params?: Record<string, string>): Promise<QrResponse<PaginationResponse<UserResponse>>> {
+    const queryString = params ? new URLSearchParams(params).toString() : '';
+    const endpoint = `/backoffice/api/notaryOffice/users/search${queryString ? `?${queryString}` : ''}`;
+    const response = await this.request<BackendPaginationResponse<UserResponse>>(endpoint, { method: 'GET' });
+    if (response.data) return { ...response, data: this.normalizePaginationResponse(response.data) };
+    return { ...response, data: null };
+  }
+
+  async assignNotaryOfficeUser(officeId: number, userId: number): Promise<QrResponse<null>> {
+    return this.request<null>(`/backoffice/api/notaryOffice/${officeId}/users`, {
+      method: 'POST',
+      body: JSON.stringify({ userId }),
+    });
+  }
+
+  async createNotaryOfficeUser(officeId: number, request: NotaryOfficeUserCreateRequest): Promise<QrResponse<UserResponse>> {
+    return this.request<UserResponse>(`/backoffice/api/notaryOffice/${officeId}/users/create`, {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
   }
 
   async getApplicationsReceived(params?: Record<string, string | string[]>): Promise<QrResponse<PaginationResponse<ApplicationReceivedResponse>>> {

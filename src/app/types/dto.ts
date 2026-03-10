@@ -364,6 +364,13 @@ export interface NotaryOfficeUpdateRequest {
   address?: AddressRequest;
 }
 
+export interface NotaryOfficeUserCreateRequest {
+  name: string;
+  lastName: string;
+  email: string;
+  password: string;
+}
+
 export interface ApplicationReceivedResponse {
   id: number;
   detail: string | null;

@@ -10,6 +10,7 @@ import {
   PaginationResponse,
   StateResponse,
   CityResponse,
+  UserResponse,
 } from '../../services/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
@@ -32,7 +33,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../ui/select';
-import { Building2, RefreshCw, Search, Plus, Edit2, Eye, Upload } from 'lucide-react';
+import { Building2, RefreshCw, Search, Plus, Edit2, Eye, Upload, ArrowLeft, UserPlus, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -85,6 +86,15 @@ export function Escribanias() {
   const [states, setStates] = useState<StateResponse[]>([]);
   const [cities, setCities] = useState<CityResponse[]>([]);
   const [citiesLoading, setCitiesLoading] = useState(false);
+
+  const [officeUsers, setOfficeUsers] = useState<UserResponse[]>([]);
+  const [officeUsersLoading, setOfficeUsersLoading] = useState(false);
+  const [userSearchTerm, setUserSearchTerm] = useState('');
+  const [userSearchResults, setUserSearchResults] = useState<UserResponse[]>([]);
+  const [userSearchLoading, setUserSearchLoading] = useState(false);
+  const [isCreateUserOpen, setIsCreateUserOpen] = useState(false);
+  const [createUserForm, setCreateUserForm] = useState({ name: '', lastName: '', email: '', password: '' });
+  const [creatingUser, setCreatingUser] = useState(false);
 
   const loadList = async (pageNum: number = 0, nameFilter?: string) => {
     if (!notaryApi.hasApi) return;
@@ -169,6 +179,98 @@ export function Escribanias() {
       setCities([]);
     }
   }, [form.address.stateId]);
+
+  const loadOfficeUsers = async () => {
+    if (!notaryApi.hasApi || editingId == null) return;
+    setOfficeUsersLoading(true);
+    try {
+      const response = await notaryApi.getNotaryOfficeUsers(editingId);
+      if (response.code === 200 && response.data) {
+        setOfficeUsers(Array.isArray(response.data) ? response.data : []);
+      } else {
+        setOfficeUsers([]);
+      }
+    } catch {
+      setOfficeUsers([]);
+    } finally {
+      setOfficeUsersLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isFormOpen && editingId != null && notaryApi.hasApi) {
+      loadOfficeUsers();
+    } else {
+      setOfficeUsers([]);
+    }
+  }, [isFormOpen, editingId, notaryApi.hasApi]);
+
+  const handleSearchUsers = async () => {
+    if (!notaryApi.hasApi) return;
+    const term = userSearchTerm.trim();
+    setUserSearchLoading(true);
+    try {
+      const params: Record<string, string> = { page: '0', size: '20' };
+      if (term) params.contains = `name:${term}`;
+      const response = await notaryApi.searchNotaryOfficeUsers(params);
+      if (response.code === 200 && response.data) {
+        setUserSearchResults(response.data.content || []);
+      } else {
+        setUserSearchResults([]);
+      }
+    } catch {
+      setUserSearchResults([]);
+    } finally {
+      setUserSearchLoading(false);
+    }
+  };
+
+  const handleAssignUser = async (userId: number) => {
+    if (!notaryApi.hasApi || editingId == null) return;
+    try {
+      const response = await notaryApi.assignNotaryOfficeUser(editingId, userId);
+      if (response.code === 200) {
+        toast.success('Usuario asignado a la escribanía');
+        await loadOfficeUsers();
+        setUserSearchTerm('');
+        setUserSearchResults([]);
+      } else {
+        toast.error(response.message || 'Error al asignar');
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Error al asignar');
+    }
+  };
+
+  const handleCreateOfficeUser = async () => {
+    if (!notaryApi.hasApi || editingId == null) return;
+    const { name, lastName, email, password } = createUserForm;
+    if (!name.trim() || !lastName.trim() || !email.trim() || password.length < 6) {
+      toast.error('Completá nombre, apellido, email y contraseña (mín. 6 caracteres)');
+      return;
+    }
+    setCreatingUser(true);
+    try {
+      const response = await notaryApi.createNotaryOfficeUser(editingId, {
+        name: name.trim(),
+        lastName: lastName.trim(),
+        email: email.trim(),
+        password,
+      });
+      if (response.code === 200 && response.data) {
+        toast.success('Usuario escribanía creado correctamente');
+        setCreateUserForm({ name: '', lastName: '', email: '', password: '' });
+        setIsCreateUserOpen(false);
+        await loadOfficeUsers();
+      } else {
+        toast.error(response.message || 'Error al crear usuario');
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Error al crear usuario');
+    } finally {
+      setCreatingUser(false);
+    }
+  };
 
   const handleSearch = () => {
     const currentSearch = searchInputRef.current?.value ?? searchName;
@@ -267,6 +369,337 @@ export function Escribanias() {
       setSaving(false);
     }
   };
+
+  if (isFormOpen) {
+    return (
+      <div className="flex flex-col h-full min-h-0 p-6 md:p-8">
+        <div className="flex items-center gap-4 mb-6 shrink-0">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsFormOpen(false)}
+            className="gap-2 shrink-0"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Volver al listado
+          </Button>
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold text-[#3b3a3e] truncate">
+              {editingId != null ? 'Editar Escribanía' : 'Nueva Escribanía'}
+            </h1>
+            <p className="text-sm text-[#6b6a6e]">
+              {editingId != null ? 'Modificá los datos y asigná usuarios' : 'Completá nombre y dirección'}
+            </p>
+          </div>
+        </div>
+        <Card className="flex-1 flex flex-col min-h-0 overflow-hidden">
+          <CardContent className="flex-1 overflow-y-auto p-6 space-y-6">
+            <div className="max-w-2xl space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="notary-name">Nombre *</Label>
+                <Input
+                  id="notary-name"
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  placeholder="Ej: Escribanía López"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Provincia *</Label>
+                <Select
+                  value={form.address.stateId ? String(form.address.stateId) : ''}
+                  onValueChange={(v) =>
+                    setForm({
+                      ...form,
+                      address: {
+                        ...form.address,
+                        stateId: v ? Number(v) : 0,
+                        cityId: null,
+                      },
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar provincia" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {states.map((s) => (
+                      <SelectItem key={s.id} value={String(s.id)}>
+                        {s.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Ciudad</Label>
+                <Select
+                  value={form.address.cityId ? String(form.address.cityId) : ''}
+                  onValueChange={(v) =>
+                    setForm({
+                      ...form,
+                      address: { ...form.address, cityId: v ? Number(v) : null },
+                    })
+                  }
+                  disabled={!form.address.stateId || citiesLoading}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={citiesLoading ? 'Cargando...' : 'Seleccionar ciudad'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {cities.map((c) => (
+                      <SelectItem key={c.id} value={String(c.id)}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Calle</Label>
+                  <Input
+                    value={form.address.street ?? ''}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        address: { ...form.address, street: e.target.value || null },
+                      })
+                    }
+                    placeholder="Calle"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Número</Label>
+                  <Input
+                    value={form.address.streetNumber ?? ''}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        address: { ...form.address, streetNumber: e.target.value || null },
+                      })
+                    }
+                    placeholder="Número"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Barrio</Label>
+                <Input
+                  value={form.address.neighborhood ?? ''}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      address: { ...form.address, neighborhood: e.target.value || null },
+                    })
+                  }
+                  placeholder="Barrio"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Piso</Label>
+                  <Input
+                    value={form.address.floor ?? ''}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        address: { ...form.address, floor: e.target.value || null },
+                      })
+                    }
+                    placeholder="Piso"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Departamento</Label>
+                  <Input
+                    value={form.address.department ?? ''}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        address: { ...form.address, department: e.target.value || null },
+                      })
+                    }
+                    placeholder="Depto"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Código postal</Label>
+                <Input
+                  value={form.address.postalCode ?? ''}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      address: { ...form.address, postalCode: e.target.value || null },
+                    })
+                  }
+                  placeholder="CP"
+                />
+              </div>
+            </div>
+
+            {editingId != null && (
+              <div className="border-t pt-6 mt-6 space-y-4">
+                <h2 className="text-lg font-semibold text-[#3b3a3e] flex items-center gap-2">
+                  <Users className="h-5 w-5" />
+                  Usuarios escribanía
+                </h2>
+                <p className="text-sm text-[#6b6a6e]">
+                  Asigná usuarios con rol escribanía o creá nuevos. Solo se listan usuarios con rol escribanía.
+                </p>
+
+                {officeUsersLoading ? (
+                  <p className="text-sm text-[#6b6a6e]">Cargando usuarios...</p>
+                ) : (
+                  <div className="space-y-2">
+                    <Label>Usuarios asignados a esta escribanía</Label>
+                    {officeUsers.length === 0 ? (
+                      <p className="text-sm text-[#6b6a6e]">Aún no hay usuarios asignados.</p>
+                    ) : (
+                      <ul className="rounded-md border divide-y bg-[#f8f9fa]/50">
+                        {officeUsers.map((u) => (
+                          <li key={u.id} className="px-4 py-2 flex items-center justify-between gap-2">
+                            <span className="text-[#3b3a3e]">
+                              {u.name} {u.lastName} — {u.email}
+                            </span>
+                            {u.roles?.length ? (
+                              <span className="text-xs text-[#6b6a6e]">
+                                {u.roles.map((r) => r.name).join(', ')}
+                              </span>
+                            ) : null}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <Label>Buscar usuarios con rol escribanía para asignar</Label>
+                  <div className="flex gap-2">
+                    <div className="flex-1 relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#6b6a6e] pointer-events-none" />
+                      <Input
+                        placeholder="Nombre o email..."
+                        value={userSearchTerm}
+                        onChange={(e) => setUserSearchTerm(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleSearchUsers()}
+                        className="pl-9"
+                      />
+                    </div>
+                    <Button variant="outline" onClick={handleSearchUsers} disabled={userSearchLoading}>
+                      {userSearchLoading ? 'Buscando...' : 'Buscar'}
+                    </Button>
+                  </div>
+                  {userSearchResults.length > 0 && (
+                    <ul className="mt-2 rounded-md border divide-y bg-white max-h-48 overflow-y-auto">
+                      {userSearchResults
+                        .filter((u) => !officeUsers.some((ou) => ou.id === u.id))
+                        .map((u) => (
+                          <li key={u.id} className="px-4 py-2 flex items-center justify-between gap-2">
+                            <span className="text-sm text-[#3b3a3e]">
+                              {u.name} {u.lastName} — {u.email}
+                            </span>
+                            <Button size="sm" onClick={() => handleAssignUser(u.id)} className="bg-[#55c3c5] hover:bg-[#4ab3b5]">
+                              Asignar
+                            </Button>
+                          </li>
+                        ))}
+                      {userSearchResults.every((u) => officeUsers.some((ou) => ou.id === u.id)) && userSearchResults.length > 0 && (
+                        <li className="px-4 py-2 text-sm text-[#6b6a6e]">Todos ya están asignados.</li>
+                      )}
+                    </ul>
+                  )}
+                </div>
+
+                <div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="gap-2"
+                    onClick={() => setIsCreateUserOpen(true)}
+                  >
+                    <UserPlus className="h-4 w-4" />
+                    Crear usuario escribanía
+                  </Button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+          <div className="shrink-0 border-t p-4 flex gap-2 justify-end bg-[#f8f9fa]/50">
+            <Button variant="outline" onClick={() => setIsFormOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSave} disabled={saving} className="bg-[#55c3c5] hover:bg-[#4ab3b5]">
+              {saving ? 'Guardando...' : editingId != null ? 'Actualizar' : 'Crear'}
+            </Button>
+          </div>
+        </Card>
+
+        {/* Dialog Crear usuario escribanía (en pantalla de edición) */}
+        <Dialog open={isCreateUserOpen} onOpenChange={setIsCreateUserOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <UserPlus className="h-5 w-5" />
+                Crear usuario escribanía
+              </DialogTitle>
+              <DialogDescription>
+                El usuario se creará con rol escribanía y quedará asignado a esta escribanía.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Nombre *</Label>
+                  <Input
+                    value={createUserForm.name}
+                    onChange={(e) => setCreateUserForm((f) => ({ ...f, name: e.target.value }))}
+                    placeholder="Nombre"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Apellido *</Label>
+                  <Input
+                    value={createUserForm.lastName}
+                    onChange={(e) => setCreateUserForm((f) => ({ ...f, lastName: e.target.value }))}
+                    placeholder="Apellido"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Email *</Label>
+                <Input
+                  type="email"
+                  value={createUserForm.email}
+                  onChange={(e) => setCreateUserForm((f) => ({ ...f, email: e.target.value }))}
+                  placeholder="email@ejemplo.com"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Contraseña * (mín. 6 caracteres)</Label>
+                <Input
+                  type="password"
+                  value={createUserForm.password}
+                  onChange={(e) => setCreateUserForm((f) => ({ ...f, password: e.target.value }))}
+                  placeholder="••••••••"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsCreateUserOpen(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={handleCreateOfficeUser} disabled={creatingUser} className="bg-[#55c3c5] hover:bg-[#4ab3b5]">
+                {creatingUser ? 'Creando...' : 'Crear'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 p-8">
@@ -460,174 +893,6 @@ export function Escribanias() {
         </DialogContent>
       </Dialog>
 
-      {/* Dialog Crear / Editar */}
-      <Dialog
-        open={isFormOpen}
-        onOpenChange={(open) => {
-          if (!open) setIsFormOpen(false);
-        }}
-      >
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{editingId != null ? 'Editar Escribanía' : 'Nueva Escribanía'}</DialogTitle>
-            <DialogDescription>
-              {editingId != null ? 'Modificá los datos de la escribanía' : 'Completá nombre y dirección'}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="notary-name">Nombre *</Label>
-              <Input
-                id="notary-name"
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="Ej: Escribanía López"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Provincia *</Label>
-              <Select
-                value={form.address.stateId ? String(form.address.stateId) : ''}
-                onValueChange={(v) =>
-                  setForm({
-                    ...form,
-                    address: {
-                      ...form.address,
-                      stateId: v ? Number(v) : 0,
-                      cityId: null,
-                    },
-                  })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar provincia" />
-                </SelectTrigger>
-                <SelectContent>
-                  {states.map((s) => (
-                    <SelectItem key={s.id} value={String(s.id)}>
-                      {s.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Ciudad</Label>
-              <Select
-                value={form.address.cityId ? String(form.address.cityId) : ''}
-                onValueChange={(v) =>
-                  setForm({
-                    ...form,
-                    address: { ...form.address, cityId: v ? Number(v) : null },
-                  })
-                }
-                disabled={!form.address.stateId || citiesLoading}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={citiesLoading ? 'Cargando...' : 'Seleccionar ciudad'} />
-                </SelectTrigger>
-                <SelectContent>
-                  {cities.map((c) => (
-                    <SelectItem key={c.id} value={String(c.id)}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Calle</Label>
-                <Input
-                  value={form.address.street ?? ''}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      address: { ...form.address, street: e.target.value || null },
-                    })
-                  }
-                  placeholder="Calle"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Número</Label>
-                <Input
-                  value={form.address.streetNumber ?? ''}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      address: { ...form.address, streetNumber: e.target.value || null },
-                    })
-                  }
-                  placeholder="Número"
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Barrio</Label>
-              <Input
-                value={form.address.neighborhood ?? ''}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    address: { ...form.address, neighborhood: e.target.value || null },
-                  })
-                }
-                placeholder="Barrio"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Piso</Label>
-                <Input
-                  value={form.address.floor ?? ''}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      address: { ...form.address, floor: e.target.value || null },
-                    })
-                  }
-                  placeholder="Piso"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Departamento</Label>
-                <Input
-                  value={form.address.department ?? ''}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      address: { ...form.address, department: e.target.value || null },
-                    })
-                  }
-                  placeholder="Depto"
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Código postal</Label>
-              <Input
-                value={form.address.postalCode ?? ''}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    address: { ...form.address, postalCode: e.target.value || null },
-                  })
-                }
-                placeholder="CP"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsFormOpen(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleSave} disabled={saving} className="bg-[#55c3c5] hover:bg-[#4ab3b5]">
-              {saving ? 'Guardando...' : editingId != null ? 'Actualizar' : 'Crear'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

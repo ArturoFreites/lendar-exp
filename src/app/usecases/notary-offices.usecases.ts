@@ -47,3 +47,35 @@ export function createUpdateNotaryOfficeUseCase(repo: NotaryOfficesRepository) {
     },
   };
 }
+
+export function createGetNotaryOfficeUsersUseCase(repo: NotaryOfficesRepository) {
+  return {
+    async execute(officeId: number) {
+      return repo.getNotaryOfficeUsers(officeId);
+    },
+  };
+}
+
+export function createSearchNotaryOfficeUsersUseCase(repo: NotaryOfficesRepository) {
+  return {
+    async execute(params?: Record<string, string>) {
+      return repo.searchNotaryOfficeUsers(params);
+    },
+  };
+}
+
+export function createAssignNotaryOfficeUserUseCase(repo: NotaryOfficesRepository) {
+  return {
+    async execute(officeId: number, userId: number) {
+      return repo.assignNotaryOfficeUser(officeId, userId);
+    },
+  };
+}
+
+export function createCreateNotaryOfficeUserUseCase(repo: NotaryOfficesRepository) {
+  return {
+    async execute(officeId: number, request: Parameters<NotaryOfficesRepository['createNotaryOfficeUser']>[1]) {
+      return repo.createNotaryOfficeUser(officeId, request);
+    },
+  };
+}

@@ -37,6 +37,7 @@ export {
   type AddressRequest,
   type NotaryOfficeRequest,
   type NotaryOfficeUpdateRequest,
+  type NotaryOfficeUserCreateRequest,
   type ApplicationReceivedResponse,
   type AuthSessionResponse,
   type DeviceFcmTokenInfo,
